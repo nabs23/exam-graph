@@ -12,12 +12,14 @@ This directory contains the product, curriculum, architecture, requirements, and
 6. [Original development and implementation guide](05-development-plan-implementation-guide.md)
 7. [CPALE syllabus and TOS baseline](06-cpale-official-syllabus-tos-baseline-2022-2028.md)
 8. [FAR worked example](07-far-complete-worked-example-syllabus-concepts-lessons-objectives-questions.md)
+9. [Bare-bones CRUD MVP development plan](09-bare-bones-crud-mvp-development-plan.md)
+10. [Bare-bones CRUD MVP test guide](10-bare-bones-crud-mvp-test-guide.md)
 
 ## Directory Contents
 
 ```text
 docs/
-├── 01–08*.md           Project documents
+├── 01–10*.md           Project documents
 └── README.md           This index
 ```
 
@@ -33,9 +35,12 @@ docs/
 | Curriculum | [06 — CPALE Official Syllabus & TOS Baseline](06-cpale-official-syllabus-tos-baseline-2022-2028.md) | Official syllabus/TOS baseline, versioning, and import rules. |
 | Curriculum | [07 — FAR Complete Worked Example](07-far-complete-worked-example-syllabus-concepts-lessons-objectives-questions.md) | End-to-end example from FAR syllabus through concepts, lessons, objectives, questions, and mastery. |
 | Planning | [08 — Executable Development Plan](08-executable-development-plan.md) | The current phased delivery plan, checklists, milestones, and release gates. |
+| Planning | [09 — Bare-Bones CRUD MVP Development Plan](09-bare-bones-crud-mvp-development-plan.md) | The intentionally small CRUD MVP scope, data model, delivery phases, and completion status. |
+| QA | [10 — Bare-Bones CRUD MVP Test Guide](10-bare-bones-crud-mvp-test-guide.md) | Automated, manual, negative-path, and database checks for verifying the finished MVP. |
 
 ## How to Use These Documents
 
 - Use the product, requirements, and architecture documents to decide what the application must do and how its domain should work.
 - Follow `08-executable-development-plan.md` for implementation order and completion checks.
+- Use `09-bare-bones-crud-mvp-development-plan.md` for the reduced MVP scope and `10-bare-bones-crud-mvp-test-guide.md` for end-to-end verification.
 - Treat the syllabus baseline and FAR example as the content-model and board-coverage authority; do not collapse official syllabus hierarchy into the instructional concept graph.

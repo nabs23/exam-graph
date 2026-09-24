@@ -1,5 +1,12 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import {
+    BookOpen,
+    ChartNoAxesColumn,
+    FolderGit2,
+    LayoutGrid,
+    Library,
+    ListTree,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -14,6 +21,11 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import concepts from '@/routes/concepts';
+import programs from '@/routes/programs';
+import progress from '@/routes/progress';
+import study from '@/routes/study';
+import subjects from '@/routes/subjects';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -21,6 +33,31 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'Study',
+        href: study.index(),
+        icon: BookOpen,
+    },
+    {
+        title: 'Progress',
+        href: progress.index(),
+        icon: ChartNoAxesColumn,
+    },
+    {
+        title: 'Programs',
+        href: programs.index(),
+        icon: Library,
+    },
+    {
+        title: 'Subjects',
+        href: subjects.index(),
+        icon: ListTree,
+    },
+    {
+        title: 'Concepts',
+        href: concepts.index(),
+        icon: BookOpen,
     },
 ];
 
