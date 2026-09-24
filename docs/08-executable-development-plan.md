@@ -1,8 +1,8 @@
-# Reviewer App — Executable Development Plan
+# ExamGraph — Executable Development Plan
 
 ## Purpose
 
-This is the delivery plan for the Reviewer App. It converts the product definition, SRS, architecture guide, CPALE baseline, and FAR worked example into sequenced, verifiable phases.
+This is the delivery plan for ExamGraph. It converts the product definition, SRS, architecture guide, CPALE baseline, and FAR worked example into sequenced, verifiable phases.
 
 The first release must prove one complete learning loop, not merely demonstrate AI text generation:
 
@@ -17,7 +17,7 @@ board-level assessment failure
 
 ## Current Starting Point
 
-The repository already provides a Laravel 13 application with Inertia React 3, Fortify authentication (including 2FA and passkeys), Wayfinder, Pest, and the standard Laravel job queue migration. It does not yet contain Reviewer App domain models, MongoDB integration, Redis/Horizon, curriculum content, or AI/RAG integrations.
+The repository already provides a Laravel 13 application with Inertia React 3, Fortify authentication (including 2FA and passkeys), Wayfinder, Pest, and the standard Laravel job queue migration. It does not yet contain ExamGraph domain models, Redis/Horizon, curriculum content, or AI/RAG integrations. MySQL is the selected application database.
 
 ## Delivery Principles
 
@@ -62,15 +62,15 @@ Defer broad AI tutor chat, automated question publication, full adaptive diagnos
 
 ### Checklist
 
-- [ ] Confirm the MVP program is CPALE and the first subject/slice is FAR 4.2 PPE.
-- [ ] Select the exact board-level PPE objective that will act as the initial remediation target.
-- [ ] Define two or more prerequisite depths for that objective using the FAR worked example.
-- [ ] Obtain and record rights/usage approval for the initial reviewer or classroom source corpus.
-- [ ] Identify an accountable content administrator and subject-matter reviewer.
-- [ ] Define the initial mastery policy (for example, threshold, minimum question count, and retry behavior) as configurable data, not code constants.
-- [ ] Define draft, review, published, and archived lifecycle states for curriculum, questions, sources, chunks, and generated assets.
-- [ ] Establish a development/staging/production environment strategy and secrets ownership.
-- [ ] Record success measures for the pilot: completion of remediation paths, reassessment improvement, source coverage, and reviewer approval rate.
+- [x] Confirm the MVP program is CPALE and the first subject/slice is FAR 4.2 PPE.
+- [x] Select the exact board-level PPE objective that will act as the initial remediation target: **determine capitalizable cost at initial recognition**.
+- [x] Define two or more prerequisite depths for that objective using the FAR worked example: PPE definition and scope (PPE-C01) → recognition criteria (PPE-C02), then initial measurement at cost (PPE-C03) → directly attributable costs (PPE-C04), with dismantling/restoration cost (PPE-C05) as a related branch.
+- [x] Obtain and record rights/usage approval for the initial source corpus: the PRBOA Resolution No. 30, s. 2022 revised LECPA syllabi and TOS PDF in `docs/board resolutions/`. Usage approval confirmed by the user; this approval applies to this source only.
+- [x] Identify an accountable content administrator and subject-matter reviewer: Admin is the interim owner for both roles.
+- [x] Define the initial mastery policy as configurable data: require at least 4 correct answers out of 5 (80%); if the learner falls short, provide the mapped remediation path, then allow another attempt with a fresh question set. Keep the threshold, question count, and retry rules configurable per policy version and objective.
+- [x] Define draft, review, published, and archived lifecycle states for curriculum, questions, sources, chunks, and generated assets. Only reviewers can approve publication; published content is immutable, and corrections create a new version. Chunks are usable only when their source is approved and published. Generated assets require reviewer approval before publication.
+- [x] Establish local development, separate staging, and isolated production environments. Keep credentials separate per environment, grant access by role, and store secrets in each environment's secret manager rather than the repository. Admin owns access initially.
+- [x] Record pilot success measures: at least 80% of learners who start remediation finish it; average reassessment improvement of at least 20 percentage points over initial scores; 100% of claims in source-grounded lessons link to approved source passages; and 100% of learner-facing content has reviewer approval before publication.
 
 ### Exit criteria
 
@@ -79,12 +79,12 @@ Defer broad AI tutor chat, automated question publication, full adaptive diagnos
 
 ## Phase 1 — Platform and Domain Foundation
 
-**Goal:** Prepare the existing Laravel/Inertia application for Reviewer App development without committing business logic to a temporary infrastructure choice.
+**Goal:** Prepare the existing Laravel/Inertia application for ExamGraph development without committing business logic to a temporary infrastructure choice.
 
 ### Checklist
 
-- [ ] Confirm and document the MongoDB hosting option, backup approach, and environment-specific connection settings.
-- [ ] Obtain approval and add the Laravel-compatible MongoDB driver; verify normal application persistence against MongoDB.
+- [ ] Confirm and document the MySQL hosting option, backup approach, and environment-specific connection settings.
+- [ ] Configure Laravel's MySQL connection and verify normal application persistence against MySQL.
 - [ ] Configure queue workers for local, staging, and production environments.
 - [ ] Add Redis and Horizon when the chosen deployment supports them; otherwise document the interim queue backend and operational limits.
 - [ ] Configure role/permission authorization for learner and content administrator capabilities.
@@ -97,7 +97,7 @@ Defer broad AI tutor chat, automated question publication, full adaptive diagnos
 ### Exit criteria
 
 - Learner and administrator accounts can sign in and access only authorized areas.
-- MongoDB persistence and a queued test job work in every development environment.
+- MySQL persistence and a queued test job work in every development environment.
 - No provider-specific AI response shape leaks into controllers or domain records.
 
 ## Phase 2 — Official Curriculum and Assessment Blueprint
@@ -197,7 +197,7 @@ Defer broad AI tutor chat, automated question publication, full adaptive diagnos
 
 - [ ] Implement an `EmbeddingService` behind a provider-neutral interface.
 - [ ] Generate embeddings asynchronously and store the embedding model/version with each vector record.
-- [ ] Configure MongoDB vector search or another approved vector implementation behind a retrieval interface.
+- [ ] Configure an approved vector search implementation behind a retrieval interface.
 - [ ] Implement retrieval filtering by program, subject, active node, publication status, and source version before semantic ranking.
 - [ ] Add optional lexical search, deduplication, and reranking only when evaluation data shows they are needed.
 - [ ] Implement controlled expansion: target node → related prerequisite/dependent nodes → subject scope only when policy permits.
@@ -280,7 +280,7 @@ Defer broad AI tutor chat, automated question publication, full adaptive diagnos
 
 ### Checklist
 
-- [ ] Add indexes from measured MongoDB query patterns and monitor retrieval latency/cost.
+- [ ] Add indexes from measured MySQL query patterns and monitor retrieval latency/cost.
 - [ ] Add cache policies for published curriculum, retrieval results where safe, and reusable generated assets.
 - [ ] Load-test quizzes, concurrent attempts, ingestion, embedding, and queued generation.
 - [ ] Define retention, export, deletion, and privacy policies for learner data and tutor histories.
@@ -307,13 +307,13 @@ A deliverable is complete only when all applicable items are true:
 
 | Decision | Required before | Owner | Decision criterion |
 | --- | --- | --- | --- |
-| MongoDB hosting and Laravel driver | Phase 1 | Technical owner | Managed service/VPS fit, backups, cost, and vector-search availability |
-| Queue backend and worker supervision | Phase 1 | Technical owner | Reliability for ingestion and generation jobs |
-| Initial source corpus rights | Phase 0 / Phase 5 | Content owner | Written permission or demonstrably authorized use |
-| LLM and embedding providers | Phase 6 | Product + technical owner | Quality, cost, privacy, streaming, and SDK fit behind interfaces |
-| Source storage and malware scanning | Phase 5 | Technical owner | File size, access controls, retention, and operating cost |
+| MySQL hosting and connection configuration | Phase 1 | Admin (interim) | Managed service/VPS fit, backups, and environment-specific settings |
+| Queue backend and worker supervision | Phase 1 | Admin (interim) | Reliability for ingestion and generation jobs |
+| Initial source corpus rights | Phase 0 / Phase 5 | Admin (interim) | Written permission or demonstrably authorized use |
+| LLM and embedding providers | Phase 6 | Admin (interim) | Quality, cost, privacy, streaming, and SDK fit behind interfaces |
+| Source storage and malware scanning | Phase 5 | Admin (interim) | File size, access controls, retention, and operating cost |
 | Mastery thresholds and retry policy | Phase 0 / Phase 4 | Subject-matter reviewer | Pilot evidence and pedagogical suitability |
-| Pilot population and success metrics | Phase 7 | Product owner | Representative learners and measurable remediation outcomes |
+| Pilot population and success metrics | Phase 7 | Admin (interim) | Representative learners and measurable remediation outcomes |
 
 ## Source Documents
 
