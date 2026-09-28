@@ -33,6 +33,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Test User',
             'password' => 'password',
         ]);
+        $user->forceFill(['is_admin' => true])->save();
 
         $program = Program::query()->firstOrCreate(['code' => 'CPALE'], ['name' => 'Certified Public Accountant Licensure Examination', 'description' => 'Local ExamGraph MVP program.']);
         $subject = Subject::query()->firstOrCreate(['program_id' => $program->id, 'code' => 'FAR'], ['name' => 'Financial Accounting and Reporting', 'description' => 'Financial reporting concepts for the local FAR review program.', 'sort_order' => 1]);
@@ -196,5 +197,7 @@ LESSON
             AttemptAnswer::query()->firstOrCreate(['quiz_attempt_id' => $attempt->id, 'question_id' => $question->id], ['question_choice_id' => $choice->id, 'is_correct' => true]);
         }
         ConceptProgress::query()->updateOrCreate(['user_id' => $user->id, 'concept_id' => $concepts['PPE-C03']->id], ['last_score' => 100, 'best_score' => 100, 'attempts_count' => 1, 'last_attempted_at' => now()->subDays(2), 'is_completed' => true]);
+
+        $this->call(FarCompleteSeeder::class);
     }
 }

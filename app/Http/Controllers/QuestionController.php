@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\QuestionRequest;
 use App\Models\Concept;
 use App\Models\Question;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -31,9 +31,9 @@ class QuestionController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request, Concept $concept): RedirectResponse
+    public function store(QuestionRequest $request, Concept $concept): RedirectResponse
     {
-        $data = $request->validate(['prompt' => ['required', 'string'], 'explanation' => ['nullable', 'string'], 'difficulty' => ['required', 'in:easy,medium,hard'], 'sort_order' => ['nullable', 'integer', 'min:0'], 'choices' => ['required', 'array', 'min:2'], 'choices.*.content' => ['required', 'string'], 'choices.*.is_correct' => ['required', 'boolean']]);
+        $data = $request->validated();
         abort_unless(collect($data['choices'])->where('is_correct', true)->count() === 1, 422, 'A question needs exactly one correct choice.');
         DB::transaction(function () use ($concept, $data): void {
             $question = $concept->questions()->create(collect($data)->except('choices')->all());
@@ -64,9 +64,9 @@ class QuestionController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Question $question): RedirectResponse
+    public function update(QuestionRequest $request, Question $question): RedirectResponse
     {
-        $data = $request->validate(['prompt' => ['required', 'string'], 'explanation' => ['nullable', 'string'], 'difficulty' => ['required', 'in:easy,medium,hard'], 'sort_order' => ['nullable', 'integer', 'min:0'], 'choices' => ['required', 'array', 'min:2'], 'choices.*.id' => ['nullable', 'exists:question_choices,id'], 'choices.*.content' => ['required', 'string'], 'choices.*.is_correct' => ['required', 'boolean']]);
+        $data = $request->validated();
         abort_unless(collect($data['choices'])->where('is_correct', true)->count() === 1, 422, 'A question needs exactly one correct choice.');
         DB::transaction(function () use ($question, $data): void {
             $question->update(collect($data)->except('choices')->all());

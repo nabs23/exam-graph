@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SyllabusTopicRequest;
 use App\Models\Subject;
 use App\Models\SyllabusTopic;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,9 +30,9 @@ class SyllabusTopicController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request, Subject $subject): RedirectResponse
+    public function store(SyllabusTopicRequest $request, Subject $subject): RedirectResponse
     {
-        $data = $request->validate(['parent_id' => ['nullable', 'exists:syllabus_topics,id'], 'code' => ['required', 'string', 'max:50'], 'title' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string'], 'sort_order' => ['nullable', 'integer', 'min:0']]);
+        $data = $request->validated();
         $this->ensureParentBelongsToSubject($data['parent_id'] ?? null, $subject);
         $topic = $subject->syllabusTopics()->create($data);
 
@@ -58,9 +58,9 @@ class SyllabusTopicController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, SyllabusTopic $syllabusTopic): RedirectResponse
+    public function update(SyllabusTopicRequest $request, SyllabusTopic $syllabusTopic): RedirectResponse
     {
-        $data = $request->validate(['parent_id' => ['nullable', 'exists:syllabus_topics,id'], 'code' => ['required', 'string', 'max:50'], 'title' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string'], 'sort_order' => ['nullable', 'integer', 'min:0']]);
+        $data = $request->validated();
         $this->ensureParentBelongsToSubject($data['parent_id'] ?? null, $syllabusTopic->subject);
         abort_if((int) ($data['parent_id'] ?? 0) === $syllabusTopic->id, 422, 'A topic cannot be its own parent.');
         $syllabusTopic->update($data);

@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ProgramRequest;
 use App\Models\Program;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -29,9 +29,9 @@ class ProgramController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(ProgramRequest $request): RedirectResponse
     {
-        $program = Program::create($request->validate(['name' => ['required', 'string', 'max:255'], 'code' => ['required', 'string', 'max:50', 'unique:programs,code'], 'description' => ['nullable', 'string']]));
+        $program = Program::create($request->validated());
 
         return to_route('programs.show', $program);
     }
@@ -55,9 +55,9 @@ class ProgramController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Program $program): RedirectResponse
+    public function update(ProgramRequest $request, Program $program): RedirectResponse
     {
-        $program->update($request->validate(['name' => ['required', 'string', 'max:255'], 'code' => ['required', 'string', 'max:50', 'unique:programs,code,'.$program->id], 'description' => ['nullable', 'string']]));
+        $program->update($request->validated());
 
         return to_route('programs.show', $program);
     }

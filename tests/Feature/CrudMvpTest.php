@@ -4,12 +4,14 @@ use App\Models\Concept;
 use App\Models\Program;
 use App\Models\Question;
 use App\Models\Quiz;
+use App\Models\QuizAttempt;
 use App\Models\Subject;
 use App\Models\SyllabusTopic;
 use App\Models\User;
 
 test('a public learner can submit a quiz and receive persisted progress', function () {
-    User::factory()->create();
+    $user = User::factory()->create();
+    $this->actingAs($user);
     $program = Program::query()->create(['name' => 'CPALE', 'code' => 'CPALE']);
     $subject = Subject::query()->create(['program_id' => $program->id, 'name' => 'FAR', 'code' => 'FAR']);
     $topic = SyllabusTopic::query()->create(['subject_id' => $subject->id, 'code' => 'PPE', 'title' => 'PPE']);
@@ -26,10 +28,16 @@ test('a public learner can submit a quiz and receive persisted progress', functi
     $this->assertDatabaseHas('quiz_attempts', ['quiz_id' => $quiz->id, 'score' => 100, 'correct_answers' => 1, 'passed' => true]);
     $this->assertDatabaseHas('attempt_answers', ['question_id' => $question->id, 'question_choice_id' => $correctChoice->id, 'is_correct' => true]);
     $this->assertDatabaseHas('concept_progress', ['concept_id' => $concept->id, 'last_score' => 100, 'best_score' => 100, 'is_completed' => true]);
+
+    $attempt = QuizAttempt::query()->firstOrFail();
+    $this->actingAs(User::factory()->create())
+        ->get(route('attempts.result', $attempt))
+        ->assertForbidden();
 });
 
 test('a quiz submission requires an answer for every question', function () {
-    User::factory()->create();
+    $user = User::factory()->create();
+    $this->actingAs($user);
     $program = Program::query()->create(['name' => 'CPALE', 'code' => 'CPALE']);
     $subject = Subject::query()->create(['program_id' => $program->id, 'name' => 'FAR', 'code' => 'FAR']);
     $concept = Concept::query()->create(['subject_id' => $subject->id, 'code' => 'PPE-1', 'title' => 'Initial cost']);
@@ -43,6 +51,8 @@ test('a quiz submission requires an answer for every question', function () {
 });
 
 test('content creation rejects a self prerequisite and invalid question choices', function () {
+    $this->actingAs(User::factory()->admin()->create());
+
     $program = Program::query()->create(['name' => 'CPALE', 'code' => 'CPALE']);
     $subject = Subject::query()->create(['program_id' => $program->id, 'name' => 'FAR', 'code' => 'FAR']);
     $concept = Concept::query()->create(['subject_id' => $subject->id, 'code' => 'PPE-1', 'title' => 'Initial cost']);
@@ -63,6 +73,8 @@ test('content creation rejects a self prerequisite and invalid question choices'
 });
 
 test('program creation validates unique program codes', function () {
+    $this->actingAs(User::factory()->admin()->create());
+
     $this->post(route('programs.store'), ['name' => 'CPALE', 'code' => 'CPALE'])
         ->assertRedirect();
 
@@ -73,6 +85,8 @@ test('program creation validates unique program codes', function () {
 });
 
 test('content CRUD creates lessons and objectives under a concept', function () {
+    $this->actingAs(User::factory()->admin()->create());
+
     $program = Program::query()->create(['name' => 'CPALE', 'code' => 'CPALE']);
     $subject = Subject::query()->create(['program_id' => $program->id, 'name' => 'FAR', 'code' => 'FAR']);
     $concept = Concept::query()->create(['subject_id' => $subject->id, 'code' => 'PPE-1', 'title' => 'Initial cost']);
@@ -92,6 +106,8 @@ test('content CRUD creates lessons and objectives under a concept', function () 
 });
 
 test('a quiz cannot include a question from another concept', function () {
+    $this->actingAs(User::factory()->admin()->create());
+
     $program = Program::query()->create(['name' => 'CPALE', 'code' => 'CPALE']);
     $subject = Subject::query()->create(['program_id' => $program->id, 'name' => 'FAR', 'code' => 'FAR']);
     $firstConcept = Concept::query()->create(['subject_id' => $subject->id, 'code' => 'PPE-1', 'title' => 'Initial cost']);
@@ -122,7 +138,7 @@ test('domain factories create usable records', function () {
 });
 
 test('public study and progress entry points render for the local learner', function () {
-    User::factory()->create();
+    $this->actingAs(User::factory()->create());
 
     $this->get(route('study.index'))->assertOk();
 

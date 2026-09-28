@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\LearningObjectiveRequest;
 use App\Models\Concept;
 use App\Models\LearningObjective;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,9 +30,9 @@ class LearningObjectiveController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request, Concept $concept): RedirectResponse
+    public function store(LearningObjectiveRequest $request, Concept $concept): RedirectResponse
     {
-        $concept->learningObjectives()->create($request->validate(['description' => ['required', 'string'], 'sort_order' => ['nullable', 'integer', 'min:0']]));
+        $concept->learningObjectives()->create($request->validated());
 
         return to_route('concepts.show', $concept);
     }
@@ -56,9 +56,9 @@ class LearningObjectiveController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, LearningObjective $objective): RedirectResponse
+    public function update(LearningObjectiveRequest $request, LearningObjective $objective): RedirectResponse
     {
-        $objective->update($request->validate(['description' => ['required', 'string'], 'sort_order' => ['nullable', 'integer', 'min:0']]));
+        $objective->update($request->validated());
 
         return to_route('concepts.show', $objective->concept);
     }

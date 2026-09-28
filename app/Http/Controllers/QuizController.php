@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\QuizRequest;
 use App\Models\Concept;
 use App\Models\Quiz;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,9 +30,9 @@ class QuizController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request, Concept $concept): RedirectResponse
+    public function store(QuizRequest $request, Concept $concept): RedirectResponse
     {
-        $data = $request->validate(['title' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string'], 'passing_score' => ['required', 'numeric', 'min:0', 'max:100'], 'question_ids' => ['required', 'array', 'min:1'], 'question_ids.*' => ['integer', 'exists:questions,id']]);
+        $data = $request->validated();
         $this->ensureQuestionsBelongToConcept($data['question_ids'], $concept);
         $quiz = $concept->quizzes()->create(collect($data)->except('question_ids')->all());
         $quiz->questions()->sync(collect($data['question_ids'])->values()->mapWithKeys(fn (int $id, int $index): array => [$id => ['sort_order' => $index]])->all());
@@ -59,9 +59,9 @@ class QuizController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Quiz $quiz): RedirectResponse
+    public function update(QuizRequest $request, Quiz $quiz): RedirectResponse
     {
-        $data = $request->validate(['title' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string'], 'passing_score' => ['required', 'numeric', 'min:0', 'max:100'], 'question_ids' => ['required', 'array', 'min:1'], 'question_ids.*' => ['integer', 'exists:questions,id']]);
+        $data = $request->validated();
         $this->ensureQuestionsBelongToConcept($data['question_ids'], $quiz->concept);
         $quiz->update(collect($data)->except('question_ids')->all());
         $quiz->questions()->sync(collect($data['question_ids'])->values()->mapWithKeys(fn (int $id, int $index): array => [$id => ['sort_order' => $index]])->all());

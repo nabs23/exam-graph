@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SubjectRequest;
 use App\Models\Program;
 use App\Models\Subject;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,9 +30,9 @@ class SubjectController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(SubjectRequest $request): RedirectResponse
     {
-        $subject = Subject::create($request->validate(['program_id' => ['required', 'exists:programs,id'], 'name' => ['required', 'string', 'max:255'], 'code' => ['required', 'string', 'max:50'], 'description' => ['nullable', 'string'], 'sort_order' => ['nullable', 'integer', 'min:0']]));
+        $subject = Subject::create($request->validated());
 
         return to_route('subjects.show', $subject);
     }
@@ -56,9 +56,9 @@ class SubjectController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Subject $subject): RedirectResponse
+    public function update(SubjectRequest $request, Subject $subject): RedirectResponse
     {
-        $subject->update($request->validate(['program_id' => ['required', 'exists:programs,id'], 'name' => ['required', 'string', 'max:255'], 'code' => ['required', 'string', 'max:50'], 'description' => ['nullable', 'string'], 'sort_order' => ['nullable', 'integer', 'min:0']]));
+        $subject->update($request->validated());
 
         return to_route('subjects.show', $subject);
     }

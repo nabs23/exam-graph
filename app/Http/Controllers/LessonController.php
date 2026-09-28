@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\LessonRequest;
 use App\Models\Concept;
 use App\Models\Lesson;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,9 +30,9 @@ class LessonController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request, Concept $concept): RedirectResponse
+    public function store(LessonRequest $request, Concept $concept): RedirectResponse
     {
-        $concept->lessons()->create($request->validate(['title' => ['required', 'string', 'max:255'], 'summary' => ['nullable', 'string'], 'content' => ['required', 'string'], 'sort_order' => ['nullable', 'integer', 'min:0']]));
+        $concept->lessons()->create($request->validated());
 
         return to_route('concepts.show', $concept);
     }
@@ -56,9 +56,9 @@ class LessonController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Lesson $lesson): RedirectResponse
+    public function update(LessonRequest $request, Lesson $lesson): RedirectResponse
     {
-        $lesson->update($request->validate(['title' => ['required', 'string', 'max:255'], 'summary' => ['nullable', 'string'], 'content' => ['required', 'string'], 'sort_order' => ['nullable', 'integer', 'min:0']]));
+        $lesson->update($request->validated());
 
         return to_route('concepts.show', $lesson->concept);
     }
