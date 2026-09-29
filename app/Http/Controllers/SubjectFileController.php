@@ -1,0 +1,95 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\FileUploadStatus;
+use App\Http\Requests\StoreSubjectFileUploadRequest;
+use App\Http\Requests\UpdateSubjectFileRequest;
+use App\Jobs\DeleteSubjectFile;
+use App\Models\Subject;
+use App\Models\SubjectFile;
+use App\Services\SourceFileStorage;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class SubjectFileController extends Controller
+{
+    public function index(Subject $subject): Response
+    {
+        return Inertia::render('admin/subject-files/index', ['subject' => $subject, 'files' => $subject->files()->with('uploader:id,name')->latest()->get()]);
+    }
+
+    public function uploadUrl(StoreSubjectFileUploadRequest $request, Subject $subject, SourceFileStorage $storage): JsonResponse
+    {
+        abort_if($subject->files()->where('uploaded_by', $request->user()->id)->where('upload_status', FileUploadStatus::PendingUpload)->count() >= 5, 429);
+        $data = $request->validated();
+        $key = $storage->createKey('subject-files', (string) $subject->id, $data['extension']);
+        $file = $subject->files()->create([
+            'file_type' => $data['file_type'], 'title' => $data['title'], 'original_filename' => basename($data['original_filename']),
+            'storage_key' => $key, 'mime_type' => $data['mime_type'], 'file_size' => $data['file_size'], 'metadata' => $data['metadata'] ?? [],
+            'uploaded_by' => $request->user()->id,
+        ]);
+
+        try {
+            $presigned = $storage->presign($key, $data['mime_type']);
+        } catch (\Throwable $exception) {
+            $file->delete();
+            throw $exception;
+        }
+
+        return response()->json(['file_id' => $file->id, 'upload_url' => $presigned['url'], 'required_headers' => $presigned['headers'], 'expires_at' => now()->addMinutes(5)->toISOString()]);
+    }
+
+    public function store(SubjectFile $subjectFile): JsonResponse
+    {
+        abort_unless($subjectFile->upload_status === FileUploadStatus::PendingUpload, 409);
+        abort_unless(str_starts_with($subjectFile->storage_key, 'subject-files/'.$subjectFile->subject_id.'/'), 404);
+        $disk = Storage::disk($subjectFile->storage_disk);
+        $size = $disk->size($subjectFile->storage_key);
+        $mime = $disk->mimeType($subjectFile->storage_key);
+
+        if ($size === false || $size < 1 || $size > 104857600 || $size !== $subjectFile->file_size || $mime !== $subjectFile->mime_type) {
+            $disk->delete($subjectFile->storage_key);
+            app(SourceFileStorage::class)->markFailed($subjectFile);
+            abort(422, 'The uploaded object did not match its declared size and content type.');
+        }
+
+        $subjectFile->forceFill(['upload_status' => FileUploadStatus::Uploaded, 'file_size' => $size, 'mime_type' => $mime, 'uploaded_at' => now()])->save();
+
+        return response()->json($subjectFile->load('uploader:id,name')->makeHidden(['storage_key', 'storage_disk']));
+    }
+
+    public function show(SubjectFile $subjectFile): Response
+    {
+        return Inertia::render('admin/subject-files/show', ['file' => $subjectFile->load('uploader:id,name', 'subject:id,name,code')->makeHidden(['storage_key', 'storage_disk'])]);
+    }
+
+    public function update(UpdateSubjectFileRequest $request, SubjectFile $subjectFile): RedirectResponse
+    {
+        $subjectFile->update($request->validated());
+
+        return back();
+    }
+
+    public function download(SubjectFile $subjectFile): JsonResponse
+    {
+        abort_unless($subjectFile->upload_status === FileUploadStatus::Uploaded, 409);
+        $filename = Str::slug(pathinfo($subjectFile->original_filename, PATHINFO_FILENAME)).'.'.Str::lower(pathinfo($subjectFile->original_filename, PATHINFO_EXTENSION));
+        $url = Storage::disk($subjectFile->storage_disk)->temporaryUrl($subjectFile->storage_key, now()->addMinutes(5), ['ResponseContentDisposition' => 'attachment; filename="'.$filename.'"', 'ResponseContentType' => $subjectFile->mime_type]);
+
+        return response()->json(['url' => $url]);
+    }
+
+    public function destroy(SubjectFile $subjectFile): RedirectResponse
+    {
+        abort_unless(in_array($subjectFile->upload_status, [FileUploadStatus::Uploaded, FileUploadStatus::Failed, FileUploadStatus::DeletePending], true), 409);
+        $subjectFile->forceFill(['upload_status' => FileUploadStatus::DeletePending])->save();
+        DeleteSubjectFile::dispatch($subjectFile->id);
+
+        return back();
+    }
+}

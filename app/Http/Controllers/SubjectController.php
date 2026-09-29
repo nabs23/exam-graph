@@ -42,7 +42,7 @@ class SubjectController extends Controller
      */
     public function show(Subject $subject): Response
     {
-        return Inertia::render('admin/subjects/show', ['subject' => $subject->load(['program', 'syllabusTopics.children', 'concepts.syllabusTopic'])]);
+        return Inertia::render('admin/subjects/show', ['subject' => $subject->load(['program', 'syllabusTopics.children', 'concepts.syllabusTopic', 'files.uploader:id,name'])]);
     }
 
     /**
@@ -68,7 +68,7 @@ class SubjectController extends Controller
      */
     public function destroy(Subject $subject): RedirectResponse
     {
-        abort_if($subject->concepts()->exists() || $subject->syllabusTopics()->exists(), 422, 'Remove the subject content before deleting it.');
+        abort_if($subject->concepts()->exists() || $subject->syllabusTopics()->exists() || $subject->files()->exists(), 422, 'Remove the subject content and source files before deleting it.');
         $subject->delete();
 
         return to_route('subjects.index');

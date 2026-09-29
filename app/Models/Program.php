@@ -18,4 +18,9 @@ class Program extends Model
     {
         return $this->hasMany(Subject::class);
     }
+
+    public function files(): HasMany
+    {
+        return $this->hasMany(ProgramFile::class);
+    }
 }

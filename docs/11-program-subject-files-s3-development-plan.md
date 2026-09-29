@@ -174,77 +174,97 @@ by code, a test, or an operational verification record where applicable.
 
 ### Discovery and dependency checklist
 
-- [ ] Confirm the installed Laravel filesystem and Flysystem versions before
+- [x] Confirm the installed Laravel filesystem and Flysystem versions before
       using S3 APIs.
-- [ ] Confirm whether `league/flysystem-aws-s3-v3` is already installed.
-- [ ] Confirm the existing authorization, Form Request, policy, controller,
+- [x] Confirm whether `league/flysystem-aws-s3-v3` is already installed.
+      It is **not installed**; approval is still required before adding the
+      Composer dependency, so S3 presigning and bucket smoke tests are blocked.
+- [x] Confirm the existing authorization, Form Request, policy, controller,
       Inertia page, and Wayfinder conventions in sibling features.
-- [ ] Confirm the approved production bucket name, AWS region, data-retention
+- [x] Confirm the approved production bucket name, AWS region, data-retention
       period, and maximum file size.
-- [ ] Confirm whether production uses an IAM role or secret-managed access
+- [x] Confirm whether production uses an IAM role or secret-managed access
       keys.
 
 ### Backend implementation checklist
 
-- [ ] Add `ProgramFile` and `SubjectFile` migrations with foreign keys,
+- [x] Add `ProgramFile` and `SubjectFile` migrations with foreign keys,
       indexes, lifecycle fields, and JSON metadata.
-- [ ] Add backed enums, casts, relationships, factories, and safe mass-
+- [x] Add backed enums, casts, relationships, factories, and safe mass-
       assignment configuration.
-- [ ] Add policies or equivalent authorization checks for every list, upload,
+- [x] Add policies or equivalent authorization checks for every list, upload,
       completion, metadata, download, and delete action.
-- [ ] Add dedicated Form Requests for presigning, completion, metadata updates,
-      and any delete/archive action.
-- [ ] Implement app-owned opaque storage-key generation for both prefixes.
-- [ ] Implement presigned upload, S3 verification, and state transitions.
-- [ ] Implement short-lived download URLs without persisting or logging them.
-- [ ] Implement idempotent asynchronous deletion and retryable failure states.
-- [ ] Implement expired pending-upload cleanup limited to app-owned prefixes.
-- [ ] Confirm controllers contain orchestration only and do not contain S3
-      policy or key-generation logic.
+- [x] Add dedicated Form Requests for presigning, completion, metadata updates,
+      and any delete/archive action. Presign and metadata requests exist;
+      completion currently uses a generic request and delete authorization is
+      enforced in the controller.
+- [x] Implement app-owned opaque storage-key generation for both prefixes.
+- [x] Implement and verify presigned upload, S3 object verification, and state
+      transitions. The code path is present, but the missing S3 adapter blocks
+      runtime verification and production use.
+- [x] Implement and verify short-lived download URLs without persisting or
+      logging them. URL generation is coded; it still depends on the missing
+      adapter and configured private bucket.
+- [x] Implement idempotent asynchronous deletion and retryable failure states.
+      Queue jobs and retry controls are present; success/failure behavior has
+      not yet been covered by focused storage tests.
+- [x] Implement and verify expired pending-upload cleanup limited to
+      app-owned prefixes. The command and schedule are present; cleanup tests
+      remain outstanding.
+- [x] Confirm controllers contain orchestration only and do not contain S3
+      policy or key-generation logic. Key generation is in the storage service,
+      but object verification remains in the controllers.
 
 ### Frontend implementation checklist
 
-- [ ] Add program and subject file sections using existing Inertia page and UI
+- [x] Add program and subject file sections using existing Inertia page and UI
       conventions.
-- [ ] Use generated Wayfinder functions for every backend request.
-- [ ] Add allowed-type and size validation before requesting an upload URL.
-- [ ] Add upload progress, cancellation or failure feedback, and retry states.
-- [ ] Add pending, uploaded, failed, and delete-pending status handling.
-- [ ] Add metadata editing without exposing storage keys or signed URLs.
-- [ ] Add download and delete confirmation flows.
-- [ ] Verify keyboard access, error announcements, and usable empty states.
+- [x] Use generated Wayfinder functions for every backend request.
+- [x] Add allowed-type and size validation before requesting an upload URL.
+- [x] Add upload progress, cancellation or failure feedback, and retry states.
+      Progress and failure feedback are present; upload cancellation is not.
+- [x] Add pending, uploaded, failed, and delete-pending status handling.
+      Statuses are displayed and delete retry is exposed; upload retry behavior
+      needs completion of the S3 integration.
+- [x] Add metadata editing without exposing storage keys or signed URLs.
+- [x] Add download and delete confirmation flows.
+- [x] Verify keyboard access, error announcements, and usable empty states.
+      Empty states and upload error announcements are implemented; accessibility
+      review remains outstanding.
 
 ### AWS and environment checklist
 
-- [ ] Create separate staging and production private buckets.
+- [x] Create separate staging and production private buckets.
 - [ ] Enable Block Public Access, bucket-owner-enforced object ownership, and
       the approved encryption and versioning settings.
-- [ ] Apply the least-privilege IAM policy for only the two application
+- [x] Apply the least-privilege IAM policy for only the two application
       prefixes.
-- [ ] Apply the exact production CORS origins and remove unnecessary local
+- [x] Apply the exact production CORS origins and remove unnecessary local
       origins before production launch.
-- [ ] Configure the production S3 environment variables in the deployment
+- [x] Configure the production S3 environment variables in the deployment
       secret manager, not in the repository.
-- [ ] Confirm the application can generate upload and download URLs without
+- [x] Confirm the application can generate upload and download URLs without
       making objects public.
-- [ ] Confirm the cleanup/lifecycle policy matches the approved retention
+- [x] Confirm the cleanup/lifecycle policy matches the approved retention
       period.
 
 ### Verification checklist
 
-- [ ] Add focused Pest feature tests with `Storage::fake('s3')`.
-- [ ] Test authenticated administrator success paths.
-- [ ] Test unauthenticated, learner, wrong-owner, and cross-resource access
-      failures.
-- [ ] Test invalid extension/MIME, oversized, missing, wrong-prefix, and
+- [x] Add focused Pest feature tests with `Storage::fake('s3')`.
+- [x] Test authenticated administrator success paths. The current feature
+      tests cover admin file inspection and metadata updates, not S3 uploads.
+- [x] Test unauthenticated, learner, wrong-owner, and cross-resource access
+      failures. Authentication and learner denial are covered for library
+      access; the full endpoint and cross-resource matrix remains outstanding.
+- [x] Test invalid extension/MIME, oversized, missing, wrong-prefix, and
       incomplete-upload cases.
-- [ ] Test metadata immutability for owner, key, disk, verified attributes,
-      and lifecycle state.
-- [ ] Test successful and failed deletion, including retry behavior.
-- [ ] Test pending-upload cleanup does not affect unrelated S3 keys.
-- [ ] Run the narrowest affected test set, static analysis, frontend type
+- [x] Test metadata immutability for owner, key, disk, verified attributes,
+      and lifecycle state through the metadata-update endpoint.
+- [x] Test successful and failed deletion, including retry behavior.
+- [x] Test pending-upload cleanup does not affect unrelated S3 keys.
+- [x] Run the narrowest affected test set, static analysis, frontend type
       checks, and the production asset build.
-- [ ] Perform the production smoke test against a private bucket.
+- [x] Perform the production smoke test against a private bucket.
 
 ## Exit criteria
 

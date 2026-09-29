@@ -29,4 +29,9 @@ class Subject extends Model
     {
         return $this->hasMany(Concept::class);
     }
+
+    public function files(): HasMany
+    {
+        return $this->hasMany(SubjectFile::class);
+    }
 }

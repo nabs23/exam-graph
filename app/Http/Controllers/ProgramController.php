@@ -41,7 +41,7 @@ class ProgramController extends Controller
      */
     public function show(Program $program): Response
     {
-        return Inertia::render('admin/programs/show', ['program' => $program->load(['subjects' => fn ($query) => $query->orderBy('sort_order')])]);
+        return Inertia::render('admin/programs/show', ['program' => $program->load(['subjects' => fn ($query) => $query->orderBy('sort_order'), 'files.uploader:id,name'])]);
     }
 
     /**
@@ -67,7 +67,7 @@ class ProgramController extends Controller
      */
     public function destroy(Program $program): RedirectResponse
     {
-        abort_if($program->subjects()->exists(), 422, 'Remove subjects before deleting this program.');
+        abort_if($program->subjects()->exists() || $program->files()->exists(), 422, 'Remove subjects and source files before deleting this program.');
         $program->delete();
 
         return to_route('programs.index');

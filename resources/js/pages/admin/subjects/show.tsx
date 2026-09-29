@@ -1,7 +1,64 @@
-import { Head, Link } from '@inertiajs/react';
-import concepts from '@/routes/concepts';
-import subjects from '@/routes/subjects';
+import { Head, Link } from "@inertiajs/react";
+import { SourceFiles, type SourceFile } from "@/components/source-files";
+import concepts from "@/routes/concepts";
+import subjects from "@/routes/subjects";
 
-export default function Subject({ subject }: { subject: { id: number; name: string; code: string; concepts: { id: number; code: string; title: string }[] } }) {
-    return <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8"><Head title={subject.name} /><div className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-medium uppercase tracking-wide text-primary">{subject.code}</p><h1 className="text-3xl font-semibold tracking-tight">{subject.name}</h1></div><Link href={subjects.edit(subject)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Edit subject</Link></div><div className="flex items-center justify-between"><h2 className="text-xl font-semibold">Concepts</h2><Link href={concepts.create()} className="text-sm font-medium text-primary hover:underline">Create a concept</Link></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{subject.concepts.map((concept) => <Link key={concept.id} href={concepts.show(concept)} className="rounded-xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"><b>{concept.code}</b><p className="mt-1 font-medium">{concept.title}</p></Link>)}</div></main>;
+export default function Subject({
+    subject,
+}: {
+    subject: {
+        id: number;
+        name: string;
+        code: string;
+        concepts: { id: number; code: string; title: string }[];
+        files: SourceFile[];
+    };
+}) {
+    return (
+        <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+            <Head title={subject.name} />
+            <div className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <p className="text-sm font-medium uppercase tracking-wide text-primary">
+                        {subject.code}
+                    </p>
+                    <h1 className="text-3xl font-semibold tracking-tight">
+                        {subject.name}
+                    </h1>
+                </div>
+                <Link
+                    href={subjects.edit(subject)}
+                    className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent"
+                >
+                    Edit subject
+                </Link>
+            </div>
+            <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold">Concepts</h2>
+                <Link
+                    href={concepts.create()}
+                    className="text-sm font-medium text-primary hover:underline"
+                >
+                    Create a concept
+                </Link>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {subject.concepts.map((concept) => (
+                    <Link
+                        key={concept.id}
+                        href={concepts.show(concept)}
+                        className="rounded-xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
+                    >
+                        <b>{concept.code}</b>
+                        <p className="mt-1 font-medium">{concept.title}</p>
+                    </Link>
+                ))}
+            </div>
+            <SourceFiles
+                ownerId={subject.id}
+                kind="subject"
+                files={subject.files}
+            />
+        </main>
+    );
 }
