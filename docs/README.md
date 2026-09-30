@@ -15,7 +15,7 @@ This directory contains the product, curriculum, architecture, requirements, and
 9. [Bare-bones CRUD MVP development plan](09-bare-bones-crud-mvp-development-plan.md)
 10. [Bare-bones CRUD MVP test guide](10-bare-bones-crud-mvp-test-guide.md)
 11. [Program and subject files S3 development plan](11-program-subject-files-s3-development-plan.md)
-12. [Laravel AI SDK integration plan](12-laravel-ai-sdk-integration-plan.md)
+12. [AI curriculum feature index](12-laravel-ai-sdk-integration-plan.md), with its ordered foundation, source-document, embedding, extraction, lesson, learner, and governance features
 13. [CI/CD setup guide](13-ci-cd-setup-guide.md)
 
 ## Directory Contents
@@ -41,7 +41,14 @@ docs/
 | Planning | [08 — Executable Development Plan](08-executable-development-plan.md) | The current phased delivery plan, checklists, milestones, and release gates. |
 | Planning | [09 — Bare-Bones CRUD MVP Development Plan](09-bare-bones-crud-mvp-development-plan.md) | The intentionally small CRUD MVP scope, data model, delivery phases, and completion status. |
 | QA | [10 — Bare-Bones CRUD MVP Test Guide](10-bare-bones-crud-mvp-test-guide.md) | Automated, manual, negative-path, and database checks for verifying the finished MVP. |
-| Planning | [12 — Laravel AI SDK Integration Plan](12-laravel-ai-sdk-integration-plan.md) | AI SDK workflow for PRC resolution extraction, source-grounded lessons, governance, and later AI capabilities. |
+| Planning | [12 — AI Curriculum Features Index](12-laravel-ai-sdk-integration-plan.md) | Entry point for independently deliverable Laravel AI SDK curriculum features. |
+| Planning | [12-A — Laravel AI SDK Foundation](12-a-laravel-ai-sdk-foundation.md) | SDK installation, provider configuration, audit runs, queues, limits, and fakes. |
+| Planning | [12-B — Source Documents and Content Mapping](12-b-source-documents-content-mapping.md) | Reviewable source intake, extraction, chunks, and mapping. |
+| Planning | [12-C — VoyageAI Embeddings and pgvector Retrieval](12-c-voyageai-pgvector-embeddings.md) | Approved-chunk embeddings, vector storage, filtered retrieval, and provenance. |
+| Planning | [12-D — Curriculum Extraction: Subjects, Topics, and Concepts](12-d-curriculum-extraction-subjects-concepts.md) | Review and publication of official hierarchy plus concept proposals. |
+| Planning | [12-E — Grounded Lesson Drafts](12-e-grounded-lesson-drafts.md) | Evidence-bounded lesson generation, review, publication, and staleness. |
+| Planning | [12-F — Learner Tutor and Practice Drafts](12-f-learner-tutor-practice-drafts.md) | Cited learner support and reviewer-approved question drafts. |
+| Planning | [12-G — AI Governance, Evaluation, and Rollout](12-g-ai-governance-evaluation-rollout.md) | Evaluation, security/privacy review, testing, and release gates. |
 | Operations | [13 — CI/CD Setup Guide](13-ci-cd-setup-guide.md) | GitHub Actions, Docker Hub, and Coolify setup for testing and deployment. |
 
 ## How to Use These Documents
