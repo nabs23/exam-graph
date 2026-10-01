@@ -29,7 +29,7 @@ class ProgramFileController extends Controller
         $data = $request->validated();
         $key = $storage->createKey('program-files', (string) $program->id, $data['extension']);
         $file = $program->files()->create([
-            'file_type' => $data['file_type'], 'title' => $data['title'], 'original_filename' => basename($data['original_filename']),
+            'title' => $data['title'], 'original_filename' => basename($data['original_filename']),
             'storage_key' => $key, 'mime_type' => $data['mime_type'], 'file_size' => $data['file_size'], 'metadata' => $data['metadata'] ?? [],
             'uploaded_by' => $request->user()->id,
         ]);

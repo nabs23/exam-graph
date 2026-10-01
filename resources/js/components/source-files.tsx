@@ -8,7 +8,7 @@ import subjectUploads from "@/routes/subjects/files";
 export type SourceFile = {
     id: number;
     title: string;
-    file_type: string;
+    file_type?: string;
     original_filename: string;
     file_size: number | null;
     upload_status: string;
@@ -29,24 +29,14 @@ export function SourceFiles({
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
-    const types =
-        kind === "program"
-            ? [
-                  "exam_specification",
-                  "official_syllabus",
-                  "board_resolution",
-                  "amendment_or_clarification",
-                  "program_reference",
-                  "other",
-              ]
-            : [
-                  "reviewer_ebook",
-                  "reviewer_notes",
-                  "lecture_material",
-                  "official_reference",
-                  "practice_material",
-                  "other",
-              ];
+    const types = [
+        "reviewer_ebook",
+        "reviewer_notes",
+        "lecture_material",
+        "official_reference",
+        "practice_material",
+        "other",
+    ];
     const uploads = kind === "program" ? programUploads : subjectUploads;
     const fileRoutes = kind === "program" ? programFiles : subjectFiles;
 
@@ -87,11 +77,13 @@ export function SourceFiles({
                     title: (
                         form.elements.namedItem("title") as HTMLInputElement
                     ).value,
-                    file_type: (
-                        form.elements.namedItem(
-                            "file_type",
-                        ) as HTMLSelectElement
-                    ).value,
+                    ...(kind === "subject" && {
+                        file_type: (
+                            form.elements.namedItem(
+                                "file_type",
+                            ) as HTMLSelectElement
+                        ).value,
+                    }),
                     original_filename: file.name,
                     mime_type: mime,
                     extension: file.name.split(".").pop()?.toLowerCase(),
@@ -177,99 +169,144 @@ export function SourceFiles({
     }
 
     return (
-        <section className="space-y-4 rounded-xl border p-5">
-            <div>
-                <h2 className="text-xl font-semibold">Files</h2>
-                <p className="text-sm text-muted-foreground">
-                    Private source materials for this {kind}.
+        <section className="space-y-6 rounded-2xl border bg-card p-6 shadow-sm">
+            <div className="border-b pb-4">
+                <h2 className="text-xl font-semibold tracking-tight">Files</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                    Manage private source materials for this {kind}.
                 </p>
             </div>
+            
             <form
                 onSubmit={upload}
-                className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                className="flex flex-wrap items-end gap-4 bg-muted/30 p-4 rounded-xl border border-dashed"
             >
-                <label className="text-sm">
-                    Title
+                <label className="min-w-48 flex-1 text-sm font-medium">
+                    <span className="mb-1.5 block">Title</span>
                     <input
                         name="title"
                         required
                         maxLength={255}
-                        className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
+                        className="block w-full rounded-lg border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+                        placeholder="Enter a descriptive title"
                     />
                 </label>
-                <label className="text-sm">
-                    File type
-                    <select
-                        name="file_type"
-                        className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
-                    >
-                        {types.map((type) => (
-                            <option key={type} value={type}>
-                                {type.replaceAll("_", " ")}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label className="text-sm">
-                    Document
+                {kind === "subject" && (
+                    <label className="min-w-48 flex-1 text-sm font-medium">
+                        <span className="mb-1.5 block">File type</span>
+                        <select
+                            name="file_type"
+                            className="block w-full rounded-lg border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+                        >
+                            {types.map((type) => (
+                                <option key={type} value={type}>
+                                    {type
+                                        .replaceAll("_", " ")
+                                        .replace(/\b\w/g, (character) =>
+                                            character.toUpperCase(),
+                                        )}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
+                <label className="min-w-48 flex-1 text-sm font-medium">
+                    <span className="mb-1.5 block">Document</span>
                     <input
                         name="file"
                         type="file"
                         accept=".pdf,.docx,.epub"
                         required
-                        className="mt-1 block w-full"
+                        className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary hover:file:bg-primary/20"
                     />
                 </label>
-                <button
-                    disabled={busy}
-                    className="self-end rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-                >
-                    {busy ? `Uploading ${progress}%` : "Upload file"}
-                </button>
+                <div className="ml-auto flex shrink-0 justify-end">
+                    <button
+                        disabled={busy}
+                        className="rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50"
+                    >
+                        {busy ? "Uploading..." : "Upload file"}
+                    </button>
+                </div>
             </form>
-            {error && (
-                <p role="alert" className="text-sm text-destructive">
-                    {error}
-                </p>
+
+            {busy && (
+                <div className="space-y-2">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Uploading...</span>
+                        <span>{progress}%</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                        <div 
+                            className="h-full bg-primary transition-all duration-300 ease-in-out" 
+                            style={{ width: `${progress}%` }}
+                        />
+                    </div>
+                </div>
             )}
+
+            {error && (
+                <div role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm font-medium text-destructive border border-destructive/20">
+                    {error}
+                </div>
+            )}
+
             {files.length === 0 ? (
-                <p className="rounded-md bg-muted p-4 text-sm">
-                    No files have been uploaded.
-                </p>
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center bg-muted/20">
+                    <p className="text-sm font-medium text-muted-foreground">
+                        No files have been uploaded yet.
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Supported formats: PDF, DOCX, EPUB (max 100MB)
+                    </p>
+                </div>
             ) : (
-                <ul className="divide-y">
+                <ul className="divide-y rounded-xl border">
                     {files.map((file) => (
                         <li
                             key={file.id}
-                            className="flex flex-wrap items-center justify-between gap-3 py-3"
+                            className="flex flex-col gap-3 p-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
                         >
-                            <div>
-                                <p className="font-medium">{file.title}</p>
-                                <p className="text-sm text-muted-foreground">
-                                    {file.file_type.replaceAll("_", " ")} ·{" "}
-                                    {file.original_filename} ·{" "}
-                                    {file.file_size === null
-                                        ? "Size pending"
-                                        : `${(file.file_size / 1048576).toFixed(1)} MiB`}{" "}
-                                    ·{" "}
-                                    {file.uploaded_at
-                                        ? new Date(
-                                              file.uploaded_at,
-                                          ).toLocaleString()
-                                        : file.upload_status}
-                                    {file.uploader
-                                        ? ` · ${file.uploader.name}`
-                                        : ""}
-                                </p>
+                            <div className="flex-1 space-y-1">
+                                <p className="text-sm font-semibold">{file.title}</p>
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                    {file.file_type && (
+                                        <span className="rounded-md bg-secondary px-2 py-0.5 capitalize">
+                                            {file.file_type.replaceAll("_", " ")}
+                                        </span>
+                                    )}
+                                    <span>{file.original_filename}</span>
+                                    <span>&bull;</span>
+                                    <span>
+                                        {file.file_size === null
+                                            ? "Size pending"
+                                            : `${(file.file_size / 1048576).toFixed(1)} MiB`}
+                                    </span>
+                                    <span>&bull;</span>
+                                    <span>
+                                        {file.uploaded_at
+                                            ? new Date(file.uploaded_at).toLocaleDateString(undefined, { 
+                                                year: 'numeric', 
+                                                month: 'short', 
+                                                day: 'numeric' 
+                                              })
+                                            : file.upload_status}
+                                    </span>
+                                    {file.uploader && (
+                                        <>
+                                            <span>&bull;</span>
+                                            <span>Uploaded by {file.uploader.name}</span>
+                                        </>
+                                    )}
+                                </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex items-center gap-3">
                                 {file.upload_status === "uploaded" && (
                                     <button
                                         type="button"
                                         onClick={async () => {
                                             const result = await fetch(
-                                                fileRoutes.download(file.id)
-                                                    .url,
+                                                fileRoutes.download(file.id).url,
                                                 {
                                                     method: "POST",
                                                     headers: {
@@ -280,12 +317,10 @@ export function SourceFiles({
                                                         Accept: "application/json",
                                                     },
                                                 },
-                                            ).then((response) =>
-                                                response.json(),
-                                            );
+                                            ).then((response) => response.json());
                                             window.location.assign(result.url);
                                         }}
-                                        className="text-sm text-primary underline"
+                                        className="rounded-md px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
                                     >
                                         Download
                                     </button>
@@ -293,16 +328,10 @@ export function SourceFiles({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        if (
-                                            window.confirm(
-                                                `Delete ${file.title}?`,
-                                            )
-                                        )
-                                            router.delete(
-                                                fileRoutes.destroy(file.id).url,
-                                            );
+                                        if (window.confirm(`Delete ${file.title}?`))
+                                            router.delete(fileRoutes.destroy(file.id).url);
                                     }}
-                                    className="text-sm text-destructive underline"
+                                    className="rounded-md px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                                 >
                                     {file.upload_status === "delete_pending"
                                         ? "Retry deletion"

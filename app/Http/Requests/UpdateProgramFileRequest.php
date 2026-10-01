@@ -2,10 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\ProgramFileType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateProgramFileRequest extends FormRequest
 {
@@ -25,7 +23,6 @@ class UpdateProgramFileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file_type' => ['required', Rule::enum(ProgramFileType::class)],
             'title' => ['required', 'string', 'max:255'],
             'metadata' => ['nullable', 'array'],
             'metadata.author' => ['nullable', 'string', 'max:255'],

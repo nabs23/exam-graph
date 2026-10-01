@@ -47,7 +47,6 @@ test('content managers can create a program file upload URL', function () {
 
     $this->actingAs($user)
         ->postJson(route('programs.files.upload-url', $program), [
-            'file_type' => 'other',
             'title' => 'Exam specification',
             'original_filename' => 'source.pdf',
             'mime_type' => 'application/pdf',

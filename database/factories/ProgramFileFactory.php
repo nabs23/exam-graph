@@ -5,7 +5,6 @@ namespace Database\Factories;
 use App\FileUploadStatus;
 use App\Models\Program;
 use App\Models\ProgramFile;
-use App\ProgramFileType;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -22,7 +21,6 @@ class ProgramFileFactory extends Factory
     {
         return [
             'program_id' => Program::factory(),
-            'file_type' => ProgramFileType::Other,
             'title' => fake()->sentence(3),
             'original_filename' => fake()->word().'.pdf',
             'storage_disk' => 's3',
