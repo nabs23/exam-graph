@@ -1,37 +1,36 @@
-# 12-A — Laravel AI SDK Foundation
+# 12-A — Laravel AI SDK Foundation for File Embeddings
 
 ## Goal
 
-Install and configure Laravel AI SDK so AI capabilities are observable, bounded, and testable before they operate on official curriculum sources.
+Establish only the foundation needed to create VoyageAI multimodal embeddings for existing program and subject files and persist them in PostgreSQL with pgvector.
 
-## Scope
+## MVP scope
 
-- Add `laravel/ai` using Composer and publish only the configuration and migrations required by the installed SDK version.
-- Define named, environment-driven provider configuration for generation and embeddings. Keep provider selection behind application services rather than controllers.
-- Establish focused agent classes for classification, curriculum extraction, concept suggestions, grounded lessons, tutor answers, and practice-question drafts.
-- Define `ai_runs` with state, idempotency key, attempt count, provider, model, prompt/schema version, latency, usage/cost, hashes, failure category, reviewer disposition, and timestamps.
-- Configure queues, bounded retries/backoff, per-provider rate limits, and a workflow feature flag for every external call.
-- Add Laravel AI fakes to support deterministic feature tests without provider traffic.
+- Use the installed Laravel AI SDK (`laravel/ai` 1.x) as the VoyageAI provider boundary.
+- Configure the VoyageAI credentials and one multimodal embedding model through environment-backed configuration.
+- Add the smallest application service and queued job needed to embed an explicitly selected `ProgramFile` or `SubjectFile`.
+- Record file/page identity, model, dimensions, content hash, status, timestamps, and a safe failure category.
+- Keep embedding disabled unless PostgreSQL, pgvector, provider configuration, and the embedding feature flag are available.
+- Use Laravel AI SDK embedding fakes for deterministic tests; no provider request should be needed in automated tests.
+
+## Explicitly deferred
+
+Do not add AI agents, chat, text generation, curriculum extraction, lesson or question drafting, reranking, retrieval APIs, generalized AI run/audit infrastructure, per-provider rate-limit systems, or AI-specific feature flags beyond this embedding workflow.
 
 ## Design
 
-Use the SDK interfaces that match the task: `Promptable` agents for generation, `HasStructuredOutput` for reviewable records, `Embeddings` for vectors, and `Reranking` only after confirming provider support. Application services remain the domain boundary:
+Use one focused `FileEmbeddingService` plus a queued job. The service accepts an eligible uploaded file, creates page-level image inputs, calls `Embeddings::for(...)->generate()` with the VoyageAI provider and configured multimodal model, and persists validated vectors and provenance. Controllers must not call the provider or persist raw provider responses.
 
-- `CurriculumExtractionService`
-- `ConceptCandidateService`
-- `EmbeddingService`
-- `RetrievalService`
-- `LearningGenerationService`
-
-Each service receives a versioned input, records an idempotent AI run, and returns a validated application result. A controller must never persist an unvalidated provider response directly.
+Reuse the existing `ProgramFile` and `SubjectFile` records as the source of truth for ownership and S3 location. Store embedding rows separately so re-embedding can replace vectors without modifying uploaded files. Do not store source bytes, signed URLs, or provider credentials in embedding records or logs.
 
 ## Acceptance criteria
 
-- A fake structured-output run can be queued, observed, retried, and reviewed without reaching a provider.
-- Disabled workflow flags prevent external calls.
-- Provider credentials and model names come only from configuration.
-- Logs and failures exclude source text and personal data unless operationally required and approved.
+- An authorized administrator can request embedding for an uploaded eligible program or subject file.
+- The job can be retried safely and does not create duplicate page embeddings for the same file version, page, model, and dimensions.
+- A failed page is visible as a safe processing failure and can be retried.
+- Provider/model/dimension configuration is explicit and vectors cannot be mixed across incompatible configurations.
+- The workflow refuses to run if the database is not PostgreSQL with pgvector enabled or required configuration is missing.
 
-## Dependencies and rollout gate
+## Dependencies and gate
 
-This is the prerequisite for all remaining 12-series features. Select a provider/model and approve its data handling, rate limits, and budget before enabling any real workflow.
+`config/database.php` falls back to SQLite when `DB_CONNECTION` is unset, and `.env.example` selects SQLite. Confirm the intended PostgreSQL environment and provision pgvector there before this workflow is implemented or enabled. Do not add unrelated Laravel AI SDK capabilities as part of this foundation.

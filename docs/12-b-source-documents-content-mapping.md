@@ -1,32 +1,38 @@
-# 12-B — Source Documents and Content Mapping
+# 12-B — Program and Subject File Embedding Inputs
 
 ## Goal
 
-Turn uploaded PRC board resolutions, examination specifications, and related authoritative documents into reviewed, page-aware source content that can safely support extraction and retrieval.
+Use the existing private program-file and subject-file library as the input boundary for the first AI MVP. This stage adds no new source-document, extracted-text, chunk-mapping, or curriculum model.
 
-## Workflow
+## Input contract
 
-1. An administrator uploads a document and supplies issuer, resolution/reference number, publication/effectivity information, document type, source reference, intended program when known, rights/usage record, and reviewer identity.
-2. The system validates authorization, MIME type, extension, size, checksum, duplicate content hash, and malware scan result. It stores the original immutably.
-3. A versioned source-document record tracks the original file, metadata, source version, status, and audit history.
-4. An idempotent job extracts the existing PDF text layer by page. It records extraction tool/version, raw page text, cleaned text, page boundaries, warnings, coverage, and missing or unusable pages.
-5. A reviewer approves, rejects, or requests correction for the extracted source before it is available to downstream AI features.
-6. The system splits approved pages into bounded source chunks. A reviewer maps each chunk to the relevant program, subject, syllabus topic, and concept where applicable, with a rationale and status.
+1. An administrator uploads or selects an already uploaded `ProgramFile` or `SubjectFile`.
+2. The application authorizes access to the owning program or subject and verifies the file is in its completed upload state.
+3. The application computes or verifies a content hash, validates the actual content type, and dispatches an idempotent embedding job.
+4. The job reads the private object through its configured storage disk. It never accepts a browser-supplied storage key or public URL.
+5. The resulting page images and vectors are associated with the source file record and original page number.
 
-## Content mapping rules
+## MVP file support
 
-- A source chunk always belongs to one source document and page; chunks preserve the source document version and rights metadata.
-- Mapping a chunk to a subject, topic, or concept requires that target to belong to the document’s program and current reviewed hierarchy.
-- Rejected chunks retain no approved mappings or embeddings.
-- A new source version never overwrites existing chunks, mappings, or published content. It creates a new review and publication path.
-- Low-quality, image-only, incomplete, or table-heavy pages go to human review. The system does not silently repair official wording with AI.
+- Raster image files supported by VoyageAI multimodal embeddings may be embedded directly as one page/image.
+- PDF files may be rendered to one image per page and embedded page by page. Keep the original PDF in private object storage; temporary rendered images are processing artifacts and must be removed after use.
+- DOCX, EPUB, OCR, text extraction, tables-to-text conversion, semantic chunking, and video are out of scope for this MVP. Leave those uploads available for ordinary file management, but show embedding as unsupported for them.
+- Apply provider image size/pixel constraints before sending a page. Oversized or unrenderable pages fail visibly and can be retried after correction; do not silently skip them.
+
+## Provenance and lifecycle
+
+- Each page embedding retains the source file ID, page number, content hash, model, dimensions, and processing timestamps.
+- An uploaded file is immutable. A replacement upload is a new file record and receives its own embeddings.
+- Editing display metadata does not invalidate vectors. Replacing file bytes or changing the configured model/dimensions requires re-embedding.
+- Deleting or archiving a file must also delete or deactivate its page embeddings.
+- Do not approve, publish, or map source content to curriculum concepts in this stage.
 
 ## Acceptance criteria
 
-- A reviewer can inspect the original document alongside every extracted page and chunk.
-- Only approved, rights-cleared chunks may enter embedding, extraction, lesson, or tutor workflows.
-- Every mapped chunk can be traced to a source document version and page number.
+- Administrators can distinguish supported, queued, processing, embedded, unsupported, and failed states.
+- Every stored vector can be traced to one source file and page, without exposing S3 keys or signed URLs in the UI.
+- Duplicate dispatches for the same unchanged file and embedding configuration do not create duplicate active vectors.
 
 ## Dependencies
 
-Requires 12-A. Feature 12-C embeds only approved chunks; 12-D extracts official hierarchy from reviewed pages.
+Requires the existing program/subject file CRUD and the narrow SDK foundation in 12-A. This stage ends at validated source-file and page-image inputs; it does not produce extracted text or curriculum mappings.

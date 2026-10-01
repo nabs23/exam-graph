@@ -1,39 +1,41 @@
-# ExamGraph — AI Curriculum Features Index
+# ExamGraph — AI Integration Plan
 
-## Purpose
+## Basic MVP
 
-This index replaces the single Laravel AI SDK integration plan with small development features that can be designed, implemented, reviewed, and released independently. The Laravel AI SDK remains an implementation boundary; it is never the authority for official PRC curriculum, learner mastery, or publication.
+The only implementation scope in this plan's first delivery is VoyageAI multimodal embeddings for uploaded program and subject files. The application will store page-level vectors in PostgreSQL with pgvector. It will not extract text, build RAG, generate concepts, generate lessons, or expose AI to learners.
 
-## Feature sequence
+The existing application currently defaults to SQLite. PostgreSQL with pgvector is a prerequisite for implementation and deployment of vector storage, not an assumed current capability.
 
-| Order | Feature | Outcome |
+## Delivery sequence
+
+| Order | Document | MVP role |
 | --- | --- | --- |
-| A | [Laravel AI SDK foundation](12-a-laravel-ai-sdk-foundation.md) | Providers, configuration, audit records, queues, rate limits, and test fakes are ready for controlled AI work. |
-| B | [Source documents and content mapping](12-b-source-documents-content-mapping.md) | Uploaded resolutions and exam specifications become versioned, reviewed, page-aware source content. |
-| C | [VoyageAI embeddings and pgvector retrieval](12-c-voyageai-pgvector-embeddings.md) | Approved source chunks can be embedded, filtered, and retrieved with page-level provenance. |
-| D | [Curriculum extraction: subjects, topics, and concepts](12-d-curriculum-extraction-subjects-concepts.md) | Reviewers can turn an uploaded official document into a published, traced curriculum draft. |
-| E | [Grounded lesson drafts](12-e-grounded-lesson-drafts.md) | Reviewers can publish lessons that cite approved source chunks. |
-| F | [Learner tutor and practice drafts](12-f-learner-tutor-practice-drafts.md) | Learners receive bounded, cited support and reviewers receive low-stakes practice drafts. |
-| G | [AI governance, evaluation, and rollout](12-g-ai-governance-evaluation-rollout.md) | Quality, privacy, security, operating limits, and pilot gates are measurable and enforced. |
+| 1 | [A — Laravel AI SDK foundation](12-a-laravel-ai-sdk-foundation.md) | Configure the installed Laravel AI SDK and one controlled VoyageAI embedding workflow. |
+| 2 | [B — Program and subject file embedding inputs](12-b-source-documents-content-mapping.md) | Reuse existing private file records; define supported input and page provenance. |
+| 3 | [C — VoyageAI multimodal embeddings in PostgreSQL](12-c-voyageai-pgvector-embeddings.md) | Render PDF pages/images, generate vectors, and store them with pgvector. |
+| 4 | [G — Embedding MVP governance and rollout](12-g-ai-governance-evaluation-rollout.md) | Evaluate, secure, and pilot this single workflow. |
 
-## Shared rules
+## Later feature notes
 
-- Administrators explicitly review and publish all official curriculum, concept graph, lesson, and question changes.
-- Every official fact and generated claim retains page- and source-version provenance.
-- Provider credentials, selected models, limits, and budgets live in environment configuration. They are never committed or stored in curriculum records.
-- The application retains the canonical extracted text and provenance. Provider file or vector storage cannot be the sole record.
-- AI workflows remain disabled until the related feature’s rollout gate is met.
+- [D — Curriculum extraction](12-d-curriculum-extraction-subjects-concepts.md)
+- [E — Grounded lesson drafts](12-e-grounded-lesson-drafts.md)
+- [F — Learner tutor and practice drafts](12-f-learner-tutor-practice-drafts.md)
 
-## Decisions that apply to every feature
+These documents are deferred placeholders. Detailed advanced AI scope, starting with RAG-assisted subject concept creation, is in [H — Advanced AI features roadmap](12-h-advanced-ai-features-roadmap.md). Do not implement these features as part of the basic MVP.
 
-1. Approve each provider, model, data-handling terms, and monthly budget before it sends production content externally.
-2. Define the retention and deletion policy for originals, extracted text, AI runs, generated drafts, and learner interactions.
-3. Maintain rights-cleared evaluation documents and reviewer-approved expected results.
-4. Run each feature first with a limited reviewer pilot before enabling it more broadly.
+## Shared MVP rules
 
-## References
+- Keep uploaded program and subject files as the source records; do not introduce generalized source-document/chunk/mapping models yet.
+- Store one embedding per supported source page/image with the original file ID and page number.
+- Keep originals in private object storage and vectors in the application PostgreSQL database.
+- Do not build text extraction, RAG/retrieval, concept generation, lesson generation, reranking, chat, or learner-facing AI into this delivery.
+- Do not add dependencies or SDK capabilities that are not required for this workflow.
+- Use the installed Laravel AI SDK version and verify its supported multimodal input classes before implementation.
 
-- [Laravel AI SDK documentation](https://laravel.com/framework/docs/13.x/ai-sdk)
-- [Architecture and RAG design](04-architecture-curriculum-graph-rag-design-guide.md)
-- [Software requirements specification](03-consolidated-software-requirements-specification.md)
-- [Executable development plan](08-executable-development-plan.md)
+## MVP completion definition
+
+An administrator can request embeddings for an eligible program or subject file, observe completion or a safe failure, retry idempotently, and verify that every stored vector belongs to the correct source file/page and configured model. PostgreSQL and pgvector are verified in the target environment.
+
+## Advanced AI roadmap
+
+The full AI feature set is intentionally separate from this basic delivery. Its first proposed capability is subject-scoped RAG that retrieves approved subject-file evidence and asks an LLM for structured concept drafts, as described in [12-H](12-h-advanced-ai-features-roadmap.md). It requires page-aware text extraction/OCR and chunk provenance; the page vectors created by the basic MVP are not sufficient by themselves.

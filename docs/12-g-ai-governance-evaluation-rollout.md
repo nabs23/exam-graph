@@ -1,39 +1,49 @@
-# 12-G — AI Governance, Evaluation, and Rollout
+# 12-G — Embedding MVP Governance and Rollout
 
 ## Goal
 
-Measure and control AI features before and after release so they remain accurate, reviewable, private, and economically sustainable.
+Enable one bounded AI workflow safely: create VoyageAI multimodal page embeddings for selected program and subject files and store them in PostgreSQL with pgvector.
 
-## Evaluation set and metrics
+## MVP evaluation
 
-Maintain a small rights-cleared corpus of representative PRC documents and reviewer-approved expected records. Evaluate each relevant feature using:
+Use a small rights-cleared set of representative program and subject files. Verify:
 
-- field-level curriculum extraction precision and recall;
-- page-citation accuracy;
-- concept-mapping agreement and prerequisite-graph validity;
-- retrieval recall, source/version filtering, and insufficient-evidence accuracy;
-- grounded-lesson claim and citation accuracy;
-- reviewer correction/rejection rate;
-- processing time, provider usage, and cost per document or response.
+- supported file/page detection and PDF page-rendering completeness;
+- expected page/vector count and source file/page provenance;
+- provider/model/dimension consistency;
+- idempotency, replacement after content changes, and retry behavior;
+- processing time and provider usage/cost per file;
+- safe handling of unsupported files, provider errors, and temporary-file cleanup.
 
-## Security and privacy review
+Do not define retrieval recall, extraction accuracy, citation accuracy, lesson quality, or tutor quality metrics yet; those workflows are not in the MVP.
 
-Before a feature is enabled, review document upload, malware scanning, provider payloads, access control, logs, queue failures, tutor interactions, retention/deletion, and source rights. Verify the organization’s actual provider data settings, contractual terms, account limits, and approved budget.
+## Security and privacy
 
-## Test requirements
+- Confirm rights to send each selected file to VoyageAI and review the provider account’s current data handling and retention terms before production use.
+- Keep S3 private and authorize every embedding request against the owning program or subject.
+- Do not log source bytes, page images, signed URLs, API keys, or full provider error payloads.
+- Delete temporary rendered pages after processing, including on job failure.
+- Keep provider credentials and model settings in managed environment configuration.
+- Document the retention/deletion behavior for embeddings when a source file is deleted or archived.
 
-Use Laravel AI SDK fakes for agents, embeddings, and reranking. Cover schema and application-validation rejection, authorization, duplicate upload/idempotency, source-page provenance, version isolation, retrieval filtering, insufficient evidence, absent citations, provider failure, rate limits, stale generated assets, and publication controls.
+## MVP test scope
+
+Use Laravel AI SDK embedding fakes for job/service behavior. Cover authorized and unauthorized requests, unsupported file types, multi-page completion, duplicate dispatch, changed content/model, provider failure, safe failure state, and deletion cleanup. Exercise the pgvector migration and dimension path against PostgreSQL with pgvector; SQLite is not a substitute for that deployment check.
 
 ## Release gates
 
-1. Enable each workflow only after its configuration, feature flag, security review, evaluation threshold, and reviewer ownership are approved.
-2. Pilot document intake and extraction with one representative resolution/specification.
-3. Pilot embeddings and retrieval against the same rights-cleared corpus, including a PostgreSQL/pgvector deployment check.
-4. Pilot lesson drafts with qualified reviewers and measure correction rate.
-5. Enable learner-facing tutor or practice drafts only after the retrieval and lesson pilots meet documented thresholds.
+1. Confirm target PostgreSQL availability, pgvector installation, model/dimension choice, provider terms, and budget.
+2. Run the workflow on a small rights-cleared reviewer corpus and manually inspect page coverage and provenance.
+3. Verify idempotent retries, cleanup, and deletion behavior in the target-like PostgreSQL environment.
+4. Enable the embedding feature for administrators only, behind its configuration/feature gate.
+5. Review operational failures and usage before increasing the pilot corpus.
+
+## Deferred gates
+
+Subject-concept RAG is the first proposed advanced feature, described in [12-H](12-h-advanced-ai-features-roadmap.md). Curriculum extraction, lessons, tutor, and practice generation each require their own product decision, evaluation set, security review, and release gate. None is implied by approval of this MVP.
 
 ## Non-goals
 
-- AI does not publish official curriculum, prerequisite edges, lessons, or questions autonomously.
-- Model knowledge does not replace an official resolution or approved instructional source.
-- SDK file/vector storage does not replace the application’s authoritative source and provenance record.
+- Embeddings do not establish curriculum facts, concepts, mappings, or citations.
+- No learner-facing AI is enabled.
+- No autonomous publication, vector search endpoint, reranker, or provider-managed vector store is part of the first release.

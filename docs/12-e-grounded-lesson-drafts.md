@@ -1,29 +1,19 @@
-# 12-E — Grounded Lesson Drafts
+# 12-E — Grounded Lesson Drafts: Deferred
 
-## Goal
+## Status
 
-Produce reviewer-approved lesson drafts for published concepts using only approved, mapped, and retrievable source evidence.
+Lesson generation is outside the first AI MVP. The MVP creates VoyageAI multimodal embeddings for program and subject files and stores them in PostgreSQL with pgvector; it does not retrieve evidence or call a text-generation model.
 
-## Preconditions
+## Future prerequisite
 
-Lesson generation is available only when the program, subject, concept, source chunks, source versions, and rights status are published or approved. The workflow returns insufficient evidence when it cannot support a requested claim.
+Revisit lesson drafts only after the application has approved source content, page-level provenance, retrieval with program/subject filters, and a reviewer workflow for checking citations. A vector alone is not a citation and cannot support a grounded lesson. Subject-scoped retrieval and structured concept drafts are the first advanced AI priority in [12-H](12-h-advanced-ai-features-roadmap.md).
 
-## Workflow
+## Deferred design notes
 
-1. An administrator chooses the concept, objective, depth, and teaching context.
-2. `RetrievalService` applies the filters defined in 12-C and returns a bounded evidence set with chunk IDs and page/version provenance.
-3. `GenerateGroundedLesson` receives only that evidence set, the learning context, lesson policy, and a strict structured-output schema.
-4. It proposes title, objectives, explanatory sections, worked example, misconceptions, practice prompts, claims, and citations.
-5. Application validation rejects citations outside the retrieved set, unsupported claims, malformed output, excessive duplication, and policy violations.
-6. The system stores the result as a draft with prompt/schema/provider/model versions, evidence IDs, source versions, content hash, and usage/cost data.
-7. A reviewer edits, approves, and publishes the lesson. Source, curriculum, policy, or model dependencies changing marks the published lesson stale.
+- Future lesson generation must use only approved evidence and return insufficient evidence when support is missing.
+- Every learner-facing claim needs a verifiable source page and source version.
+- A reviewer must edit and approve drafts before publication.
 
-## Acceptance criteria
+## Not included in the MVP
 
-- Every learner-facing claim has valid evidence from the generation run.
-- Reviewers can inspect each lesson draft alongside its cited source pages.
-- Published lessons are invalidated when dependent curriculum or source evidence changes.
-
-## Dependencies
-
-Requires 12-A through 12-C and a published concept from 12-D.
+Retrieval, chunk mapping, lesson prompts or agents, structured lesson output, claim validation, citation verification, draft storage, publishing, staleness tracking, and lesson quality evaluation.
