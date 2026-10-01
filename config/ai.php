@@ -44,8 +44,16 @@ return [
         'enabled' => (bool) env('AI_FILE_EMBEDDINGS_ENABLED', false),
         'pdf_page_limit' => (int) env('AI_FILE_EMBEDDINGS_PDF_PAGE_LIMIT', 50),
         'pdfinfo_binary' => env('AI_FILE_EMBEDDINGS_PDFINFO_BINARY', 'pdfinfo'),
+        'pdfinfo_timeout' => (int) env('AI_FILE_EMBEDDINGS_PDFINFO_TIMEOUT', 10),
         'pdftotext_binary' => env('AI_FILE_EMBEDDINGS_PDFTOTEXT_BINARY', 'pdftotext'),
+        'pdftotext_timeout' => (int) env('AI_FILE_EMBEDDINGS_PDFTOTEXT_TIMEOUT', 20),
         'timeout' => (int) env('AI_FILE_EMBEDDINGS_TIMEOUT', 40),
+        'job_tries' => (int) env('AI_FILE_EMBEDDINGS_JOB_TRIES', 3),
+        'job_backoff' => [
+            (int) env('AI_FILE_EMBEDDINGS_JOB_INITIAL_BACKOFF', 10),
+            (int) env('AI_FILE_EMBEDDINGS_JOB_SECOND_BACKOFF', 30),
+        ],
+        'job_timeout' => (int) env('AI_FILE_EMBEDDINGS_JOB_TIMEOUT', 120),
     ],
 
     /*

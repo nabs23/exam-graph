@@ -193,3 +193,17 @@ test('an exhausted embedding job records a safe failure state', function () {
         'embedding_error_code' => 'embedding_failed',
     ]);
 });
+
+test('embedding jobs use the configured retry bounds', function () {
+    config([
+        'ai.file_embeddings.job_tries' => 2,
+        'ai.file_embeddings.job_backoff' => [15, 45],
+        'ai.file_embeddings.job_timeout' => 150,
+    ]);
+
+    $job = new EmbedSourceFile(false, 1);
+
+    expect($job->tries)->toBe(2)
+        ->and($job->backoff())->toBe([15, 45])
+        ->and($job->timeout)->toBe(150);
+});

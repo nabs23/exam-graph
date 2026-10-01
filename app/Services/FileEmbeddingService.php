@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\FileEmbeddingException;
 use App\FileEmbeddingStatus;
 use App\FileUploadStatus;
 use App\Jobs\EmbedSourceFile;
@@ -17,6 +18,7 @@ use Laravel\Ai\Embeddings;
 use Laravel\Ai\Enums\Lab;
 use LogicException;
 use RuntimeException;
+use Throwable;
 
 class FileEmbeddingService
 {
@@ -33,7 +35,7 @@ class FileEmbeddingService
             $this->assertReady();
 
             return true;
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return false;
         }
     }
@@ -132,19 +134,19 @@ class FileEmbeddingService
             $vectors = $this->generate(array_column($pages, 'content'));
 
             if (count($vectors) !== count($pages)) {
-                throw new RuntimeException('The embedding provider returned an unexpected vector count.');
+                throw new FileEmbeddingException('invalid_embedding_response', false, 'The embedding provider returned an unexpected vector count.');
             }
 
             $dimensions = $this->dimensions();
 
             foreach ($vectors as $vector) {
                 if (! array_is_list($vector) || count($vector) !== $dimensions) {
-                    throw new RuntimeException('The embedding provider returned an invalid vector.');
+                    throw new FileEmbeddingException('invalid_embedding_response', false, 'The embedding provider returned an invalid vector.');
                 }
 
                 foreach ($vector as $value) {
                     if (! is_numeric($value) || ! is_finite((float) $value)) {
-                        throw new RuntimeException('The embedding provider returned an invalid vector.');
+                        throw new FileEmbeddingException('invalid_embedding_response', false, 'The embedding provider returned an invalid vector.');
                     }
                 }
             }
@@ -159,7 +161,21 @@ class FileEmbeddingService
                 'embedded_at' => now(),
             ])->save();
         } finally {
-            File::deleteDirectory($temporaryDirectory);
+            try {
+                File::deleteDirectory($temporaryDirectory);
+                $temporaryFilesRemoved = ! File::exists($temporaryDirectory);
+            } catch (Throwable) {
+                $temporaryFilesRemoved = false;
+            }
+
+            if (! $temporaryFilesRemoved) {
+                $file->forceFill([
+                    'embedding_status' => FileEmbeddingStatus::Failed,
+                    'embedding_error_code' => 'temporary_cleanup_failed',
+                ])->save();
+
+                throw new FileEmbeddingException('temporary_cleanup_failed', true, 'Temporary PDF cleanup failed.');
+            }
         }
     }
 
@@ -172,10 +188,14 @@ class FileEmbeddingService
             throw new LogicException('File embeddings are disabled.');
         }
 
-        $response = Embeddings::for($texts)
-            ->dimensions($this->dimensions())
-            ->timeout((int) config('ai.file_embeddings.timeout', 40))
-            ->generate(Lab::VoyageAI, (string) config('ai.providers.voyageai.models.embeddings.default'));
+        try {
+            $response = Embeddings::for($texts)
+                ->dimensions($this->dimensions())
+                ->timeout((int) config('ai.file_embeddings.timeout', 40))
+                ->generate(Lab::VoyageAI, (string) config('ai.providers.voyageai.models.embeddings.default'));
+        } catch (Throwable) {
+            throw new FileEmbeddingException('provider_failed', true, 'The embedding provider request failed.');
+        }
 
         return $response->embeddings;
     }
@@ -206,7 +226,20 @@ class FileEmbeddingService
             throw new RuntimeException('The configured VoyageAI model does not support text embeddings.');
         }
 
-        if ($this->dimensions() !== 1024) {
+        $column = DB::selectOne(
+            'SELECT format_type(attributes.atttypid, attributes.atttypmod) AS type
+             FROM pg_attribute AS attributes
+             INNER JOIN pg_class AS classes ON classes.oid = attributes.attrelid
+             INNER JOIN pg_namespace AS namespaces ON namespaces.oid = classes.relnamespace
+             WHERE namespaces.nspname = current_schema()
+               AND classes.relname = ?
+               AND attributes.attname = ?
+               AND attributes.attnum > 0
+               AND NOT attributes.attisdropped',
+            ['file_page_embeddings', 'embedding'],
+        );
+
+        if ($column?->type !== 'vector('.$this->dimensions().')') {
             throw new RuntimeException('The configured VoyageAI embedding dimension does not match the installed vector column.');
         }
     }
@@ -243,13 +276,13 @@ class FileEmbeddingService
         }
 
         if (filesize($destination) < 5 || file_get_contents($destination, false, null, 0, 5) !== '%PDF-') {
-            throw new RuntimeException('The source file is not a valid PDF.');
+            throw new FileEmbeddingException('invalid_source_pdf', false, 'The source file is not a valid PDF.');
         }
 
         $fileSize = filesize($destination);
 
         if ($fileSize > 104857600 || ($file->file_size !== null && $fileSize !== $file->file_size)) {
-            throw new RuntimeException('The source file size does not match its verified upload record.');
+            throw new FileEmbeddingException('source_file_size_mismatch', false, 'The source file size does not match its verified upload record.');
         }
 
         $sourceHash = hash_file('sha256', $destination);

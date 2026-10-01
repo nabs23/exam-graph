@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\FileEmbeddingException;
 use App\FileEmbeddingStatus;
 use App\Models\ProgramFile;
 use App\Models\SubjectFile;
@@ -15,16 +16,23 @@ class EmbedSourceFile implements ShouldBeUnique, ShouldQueueAfterCommit
 {
     use Queueable;
 
-    public int $tries = 3;
+    public int $tries;
 
-    /** @var array<int, int> */
-    public array $backoff = [10, 30];
-
-    public int $timeout = 80;
+    public int $timeout;
 
     public int $uniqueFor = 3600;
 
-    public function __construct(public bool $isSubjectFile, public int $fileId) {}
+    public function __construct(public bool $isSubjectFile, public int $fileId)
+    {
+        $this->tries = (int) config('ai.file_embeddings.job_tries', 3);
+        $this->timeout = (int) config('ai.file_embeddings.job_timeout', 120);
+    }
+
+    /** @return array<int, int> */
+    public function backoff(): array
+    {
+        return config('ai.file_embeddings.job_backoff', [10, 30]);
+    }
 
     public function handle(FileEmbeddingService $fileEmbeddingService): void
     {
@@ -33,7 +41,20 @@ class EmbedSourceFile implements ShouldBeUnique, ShouldQueueAfterCommit
             : ProgramFile::query()->find($this->fileId);
 
         if ($file !== null) {
-            $fileEmbeddingService->embed($file);
+            try {
+                $fileEmbeddingService->embed($file);
+            } catch (FileEmbeddingException $exception) {
+                if ($exception->retryable) {
+                    throw $exception;
+                }
+
+                $file->forceFill([
+                    'embedding_status' => FileEmbeddingStatus::Failed,
+                    'embedding_error_code' => $exception->errorCode,
+                ])->save();
+
+                $this->fail($exception);
+            }
         }
     }
 
@@ -51,7 +72,9 @@ class EmbedSourceFile implements ShouldBeUnique, ShouldQueueAfterCommit
         if ($file !== null) {
             $file->forceFill([
                 'embedding_status' => FileEmbeddingStatus::Failed,
-                'embedding_error_code' => 'embedding_failed',
+                'embedding_error_code' => $exception instanceof FileEmbeddingException
+                    ? $exception->errorCode
+                    : 'embedding_failed',
             ])->save();
         }
     }
