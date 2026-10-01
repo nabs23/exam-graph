@@ -1,6 +1,64 @@
-import { Head, Link } from '@inertiajs/react';
-import programs from '@/routes/programs';
+import { Head, Link } from "@inertiajs/react";
+import programs from "@/routes/programs";
 
-export default function Programs({ programs: items }: { programs: { id: number; name: string; code: string; subjects_count: number }[] }) {
-    return <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8"><Head title="Programs" /><div className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium uppercase tracking-wide text-primary">Curriculum administration</p><h1 className="text-3xl font-semibold tracking-tight">Programs</h1><p className="mt-1 text-muted-foreground">Manage review programs and their subject structure.</p></div><Link href={programs.create()} className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90">New program</Link></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{items.map((program) => <Link key={program.id} href={programs.show(program)} className="rounded-xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"><div className="flex items-center justify-between gap-3"><b className="text-lg">{program.code}</b><span className="text-sm text-muted-foreground">{program.subjects_count} subjects</span></div><p className="mt-2 font-medium">{program.name}</p></Link>)}</div></main>;
+export default function Programs({
+    programs: items,
+}: {
+    programs: {
+        id: number;
+        name: string;
+        code: string;
+        subjects_count: number;
+    }[];
+}) {
+    return (
+        <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+            <Head title="Programs" />
+            <div className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p className="text-sm font-medium uppercase tracking-wide text-primary">
+                        Curriculum administration
+                    </p>
+                    <h1 className="text-3xl font-semibold tracking-tight">
+                        Programs
+                    </h1>
+                    <p className="mt-1 text-muted-foreground">
+                        Manage review programs and their subject structure.
+                    </p>
+                </div>
+                <Link
+                    href={programs.create()}
+                    className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90"
+                >
+                    New program
+                </Link>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {items.map((program) => (
+                    <Link
+                        key={program.id}
+                        href={programs.show(program)}
+                        className="rounded-xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
+                    >
+                        <div className="flex items-center justify-between gap-3">
+                            <b className="text-lg">{program.code}</b>
+                            <span className="text-sm text-muted-foreground">
+                                {program.subjects_count} subjects
+                            </span>
+                        </div>
+                        <p className="mt-2 font-medium">{program.name}</p>
+                    </Link>
+                ))}
+            </div>
+        </main>
+    );
 }
+
+Programs.layout = {
+    breadcrumbs: [
+        {
+            title: "Program",
+            href: programs.index(),
+        },
+    ],
+};

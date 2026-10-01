@@ -66,3 +66,10 @@ export default function Program({
         </main>
     );
 }
+
+Program.layout = (props: { program: { id: number; name: string } }) => ({
+    breadcrumbs: [
+        { title: 'Programs', href: programs.index() },
+        { title: "Program", href: programs.show(props.program) },
+    ],
+});

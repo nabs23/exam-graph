@@ -62,3 +62,10 @@ export default function Subject({
         </main>
     );
 }
+
+Subject.layout = (props: { subject: { id: number; name: string } }) => ({
+    breadcrumbs: [
+        { title: 'Subjects', href: subjects.index() },
+        { title: 'Subject', href: subjects.show(props.subject) },
+    ],
+});

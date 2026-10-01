@@ -1,5 +1,9 @@
 import { Head, Link } from '@inertiajs/react';
 import questions from '@/routes/questions';
+import concepts from '@/routes/concepts';
+import conceptQuestions from '@/routes/concepts/questions';
 export default function Question({ question }: { question: { id: number; prompt: string; explanation: string | null; difficulty: string; concept: { id: number; title: string }; choices: { id: number; content: string; is_correct: boolean }[] } }) {
     return <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8"><Head title="Question" /><div className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-medium uppercase tracking-wide text-primary">{question.concept.title}</p><h1 className="text-3xl font-semibold tracking-tight">Question</h1></div><Link href={questions.edit(question)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Edit question</Link></div><article className="rounded-xl border bg-card p-6 shadow-sm"><p className="text-lg font-semibold">{question.prompt}</p><p className="mt-3 text-sm text-muted-foreground">Difficulty: {question.difficulty}</p><ul className="mt-5 grid gap-2">{question.choices.map((choice) => <li key={choice.id} className={choice.is_correct ? 'rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 font-medium text-emerald-700 dark:text-emerald-300' : 'rounded-lg border p-3'}>{choice.content}</li>)}</ul><p className="mt-5 border-t pt-4 text-sm text-muted-foreground">{question.explanation}</p></article></main>;
 }
+
+Question.layout = (props: { question: { id: number; concept: { id: number } } }) => ({ breadcrumbs: [{ title: 'Concept', href: concepts.show(props.question.concept) }, { title: 'Questions', href: conceptQuestions.index(props.question.concept) }, { title: 'Question', href: questions.show(props.question) }] });

@@ -38,3 +38,7 @@ export default function Concepts({
         </main>
     );
 }
+
+Concepts.layout = {
+    breadcrumbs: [{ title: 'Concept', href: concepts.index() }],
+};

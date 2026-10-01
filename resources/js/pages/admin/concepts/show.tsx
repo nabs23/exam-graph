@@ -4,6 +4,7 @@ import lessons from '@/routes/concepts/lessons';
 import objectives from '@/routes/concepts/objectives';
 import questions from '@/routes/concepts/questions';
 import quizzes from '@/routes/concepts/quizzes';
+import concepts from '@/routes/concepts';
 
 type Concept = {
     id: number;
@@ -172,3 +173,13 @@ export default function Concept({ concept }: { concept: Concept }) {
         </main>
     );
 }
+
+Concept.layout = (props: { concept: Concept }) => ({
+    breadcrumbs: [
+        { title: 'Concepts', href: concepts.index() },
+        {
+            title: 'Concept',
+            href: concepts.show(props.concept.id),
+        },
+    ],
+});
