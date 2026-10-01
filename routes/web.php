@@ -38,6 +38,7 @@ Route::middleware(['auth', 'verified', 'can:manage-content'])->group(function ()
     Route::patch('files/{programFile}', [ProgramFileController::class, 'update'])->name('program-files.update');
     Route::delete('files/{programFile}', [ProgramFileController::class, 'destroy'])->name('program-files.destroy');
     Route::post('files/{programFile}/download', [ProgramFileController::class, 'download'])->name('program-files.download');
+    Route::post('files/{programFile}/embeddings', [ProgramFileController::class, 'embed'])->middleware('throttle:5,1')->name('program-files.embeddings.store');
     Route::get('subjects/{subject}/files', [SubjectFileController::class, 'index'])->name('subjects.files.index');
     Route::post('subjects/{subject}/files/uploads', [SubjectFileController::class, 'uploadUrl'])->middleware('throttle:10,1')->name('subjects.files.upload-url');
     Route::post('subject-files/{subjectFile}', [SubjectFileController::class, 'store'])->middleware('throttle:10,1')->name('subject-files.store');
@@ -45,6 +46,7 @@ Route::middleware(['auth', 'verified', 'can:manage-content'])->group(function ()
     Route::patch('subject-files/{subjectFile}', [SubjectFileController::class, 'update'])->name('subject-files.update');
     Route::delete('subject-files/{subjectFile}', [SubjectFileController::class, 'destroy'])->name('subject-files.destroy');
     Route::post('subject-files/{subjectFile}/download', [SubjectFileController::class, 'download'])->name('subject-files.download');
+    Route::post('subject-files/{subjectFile}/embeddings', [SubjectFileController::class, 'embed'])->middleware('throttle:5,1')->name('subject-files.embeddings.store');
     Route::resource('concepts', ConceptController::class);
     Route::resource('subjects.topics', SyllabusTopicController::class)->shallow();
     Route::resource('concepts.questions', QuestionController::class)->shallow();

@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\FileEmbeddingStatus;
 use App\FileUploadStatus;
 use App\Http\Requests\StoreProgramFileUploadRequest;
 use App\Http\Requests\UpdateProgramFileRequest;
 use App\Jobs\DeleteProgramFile;
 use App\Models\Program;
 use App\Models\ProgramFile;
+use App\Services\FileEmbeddingService;
 use App\Services\SourceFileStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -63,9 +67,43 @@ class ProgramFileController extends Controller
         return response()->json($programFile->load('uploader:id,name')->makeHidden(['storage_key', 'storage_disk']));
     }
 
-    public function show(ProgramFile $programFile): Response
+    public function show(ProgramFile $programFile, FileEmbeddingService $fileEmbeddingService): Response
     {
-        return Inertia::render('admin/program-files/show', ['file' => $programFile->load('uploader:id,name', 'program:id,name,code')->makeHidden(['storage_key', 'storage_disk'])]);
+        $embeddingPreviews = collect();
+        $embeddingDataBytes = null;
+        $embeddingPageCount = null;
+        $embeddingsAvailable = $fileEmbeddingService->isAvailable();
+
+        if ($embeddingsAvailable
+            && $programFile->embedding_status === FileEmbeddingStatus::Complete
+            && Schema::hasTable('file_page_embeddings')) {
+            $embeddingPreviews = $programFile->pageEmbeddings()
+                ->orderBy('page_number')
+                ->limit(5)
+                ->get(['page_number', 'model', 'dimensions', 'embedding'])
+                ->map(fn ($embedding): array => [
+                    'page_number' => $embedding->page_number,
+                    'model' => $embedding->model,
+                    'dimensions' => $embedding->dimensions,
+                    'values' => array_slice($embedding->embedding ?? [], 0, 8),
+                ]);
+
+            if (DB::connection()->getDriverName() === 'pgsql') {
+                $embeddingSummary = $programFile->pageEmbeddings()
+                    ->selectRaw('count(*) as embedding_page_count, coalesce(sum(pg_column_size(embedding)), 0) as embedding_data_bytes')
+                    ->first();
+                $embeddingDataBytes = (int) $embeddingSummary->embedding_data_bytes;
+                $embeddingPageCount = (int) $embeddingSummary->embedding_page_count;
+            }
+        }
+
+        return Inertia::render('admin/program-files/show', [
+            'file' => $programFile->load('uploader:id,name', 'program:id,name,code')->makeHidden(['storage_key', 'storage_disk']),
+            'fileEmbeddingsEnabled' => $embeddingsAvailable,
+            'embeddingPreviews' => $embeddingPreviews,
+            'embeddingDataBytes' => $embeddingDataBytes,
+            'embeddingPageCount' => $embeddingPageCount,
+        ]);
     }
 
     public function update(UpdateProgramFileRequest $request, ProgramFile $programFile): RedirectResponse
@@ -82,6 +120,15 @@ class ProgramFileController extends Controller
         $url = Storage::disk($programFile->storage_disk)->temporaryUrl($programFile->storage_key, now()->addMinutes(5), ['ResponseContentDisposition' => 'attachment; filename="'.$filename.'"', 'ResponseContentType' => $programFile->mime_type]);
 
         return response()->json(['url' => $url]);
+    }
+
+    public function embed(ProgramFile $programFile, FileEmbeddingService $fileEmbeddingService): RedirectResponse
+    {
+        abort_unless($fileEmbeddingService->isAvailable(), 404);
+        abort_unless($programFile->upload_status === FileUploadStatus::Uploaded, 409);
+        $fileEmbeddingService->queue($programFile);
+
+        return back();
     }
 
     public function destroy(ProgramFile $programFile): RedirectResponse

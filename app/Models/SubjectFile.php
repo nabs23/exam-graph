@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\FileEmbeddingStatus;
 use App\FileUploadStatus;
 use App\SubjectFileType;
 use Database\Factories\SubjectFileFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SubjectFile extends Model
 {
@@ -23,8 +25,10 @@ class SubjectFile extends Model
         return [
             'file_type' => SubjectFileType::class,
             'upload_status' => FileUploadStatus::class,
+            'embedding_status' => FileEmbeddingStatus::class,
             'metadata' => 'array',
             'uploaded_at' => 'datetime',
+            'embedded_at' => 'datetime',
         ];
     }
 
@@ -36,5 +40,10 @@ class SubjectFile extends Model
     public function uploader(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    public function pageEmbeddings(): HasMany
+    {
+        return $this->hasMany(FilePageEmbedding::class);
     }
 }

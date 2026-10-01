@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\FileEmbeddingStatus;
 use App\FileUploadStatus;
 use Database\Factories\ProgramFileFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProgramFile extends Model
 {
@@ -21,8 +23,10 @@ class ProgramFile extends Model
     {
         return [
             'upload_status' => FileUploadStatus::class,
+            'embedding_status' => FileEmbeddingStatus::class,
             'metadata' => 'array',
             'uploaded_at' => 'datetime',
+            'embedded_at' => 'datetime',
         ];
     }
 
@@ -34,5 +38,10 @@ class ProgramFile extends Model
     public function uploader(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    public function pageEmbeddings(): HasMany
+    {
+        return $this->hasMany(FilePageEmbedding::class);
     }
 }

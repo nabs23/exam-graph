@@ -1,5 +1,5 @@
-import { router } from "@inertiajs/react";
-import { useState } from "react";
+import { Link, router, usePoll } from "@inertiajs/react";
+import { useEffect, useState } from "react";
 import programFiles from "@/routes/program-files";
 import programUploads from "@/routes/programs/files";
 import subjectFiles from "@/routes/subject-files";
@@ -10,12 +10,33 @@ export type SourceFile = {
     title: string;
     file_type?: string;
     original_filename: string;
+    mime_type: string | null;
     file_size: number | null;
     upload_status: string;
+    embedding_status: 'not_requested' | 'queued' | 'processing' | 'complete' | 'unsupported' | 'failed';
+    embedding_error_code: string | null;
+    embedding_model: string | null;
     uploaded_at: string | null;
     metadata?: Record<string, string> | null;
     uploader: { name: string } | null;
 };
+
+export function useFileEmbeddingPolling(active: boolean, only: string[]) {
+    const { start, stop } = usePoll(3000, { only }, {
+        autoStart: false,
+        mode: "rest",
+    });
+
+    useEffect(() => {
+        if (active) {
+            start();
+        } else {
+            stop();
+        }
+
+        return stop;
+    }, [active, start, stop]);
+}
 
 export function SourceFiles({
     ownerId,
@@ -39,6 +60,10 @@ export function SourceFiles({
     ];
     const uploads = kind === "program" ? programUploads : subjectUploads;
     const fileRoutes = kind === "program" ? programFiles : subjectFiles;
+    useFileEmbeddingPolling(
+        files.some((file) => ["queued", "processing"].includes(file.embedding_status)),
+        ["files"],
+    );
 
     async function upload(event: React.ChangeEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -268,7 +293,14 @@ export function SourceFiles({
                             className="flex flex-col gap-3 p-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
                         >
                             <div className="flex-1 space-y-1">
-                                <p className="text-sm font-semibold">{file.title}</p>
+                                <p className="text-sm font-semibold">
+                                    <Link
+                                        href={fileRoutes.show(file.id).url}
+                                        className="text-primary hover:underline focus-visible:underline"
+                                    >
+                                        {file.title}
+                                    </Link>
+                                </p>
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                     {file.file_type && (
                                         <span className="rounded-md bg-secondary px-2 py-0.5 capitalize">
@@ -276,6 +308,10 @@ export function SourceFiles({
                                         </span>
                                     )}
                                     <span>{file.original_filename}</span>
+                                    <span>&bull;</span>
+                                    <span className="capitalize">
+                                        Embeddings: {file.embedding_status.replaceAll("_", " ")}
+                                    </span>
                                     <span>&bull;</span>
                                     <span>
                                         {file.file_size === null
