@@ -2,7 +2,7 @@
 
 ## Status
 
-This feature is outside the first AI MVP. The current delivery is limited to VoyageAI multimodal embeddings for program and subject files, stored in PostgreSQL with pgvector.
+This feature is outside the first AI MVP. The current delivery is limited to VoyageAI text embeddings for program and subject PDFs, stored in PostgreSQL with pgvector.
 
 ## Future goal
 

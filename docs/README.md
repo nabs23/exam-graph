@@ -45,7 +45,7 @@ docs/
 | Planning | [12 — AI Integration Plan](12-laravel-ai-sdk-integration-plan.md) | Defines the basic file-embedding MVP and separates it from advanced AI features. |
 | Planning | [12-A — Laravel AI SDK Foundation](12-a-laravel-ai-sdk-foundation.md) | Minimal SDK configuration, service, job, and fakes for file embeddings. |
 | Planning | [12-B — Program and Subject File Embedding Inputs](12-b-source-documents-content-mapping.md) | Reuses existing private files and defines basic supported inputs. |
-| Planning | [12-C — VoyageAI Multimodal Embeddings](12-c-voyageai-pgvector-embeddings.md) | Stores page-level file vectors in PostgreSQL with pgvector; no retrieval. |
+| Planning | [12-C — VoyageAI Text Embeddings](12-c-voyageai-pgvector-embeddings.md) | Stores page-level PDF text and vectors in PostgreSQL with pgvector; no retrieval. |
 | Planning | [12-D — Official Curriculum Extraction](12-d-curriculum-extraction-subjects-concepts.md) | Deferred notes for future official syllabus extraction. |
 | Planning | [12-E — Grounded Lesson Drafts](12-e-grounded-lesson-drafts.md) | Deferred notes for future evidence-grounded lesson generation. |
 | Planning | [12-F — Learner Tutor and Practice Drafts](12-f-learner-tutor-practice-drafts.md) | Deferred notes for future learner and practice features. |

@@ -15,13 +15,12 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Files\Image;
 use LogicException;
 use RuntimeException;
 
 class FileEmbeddingService
 {
-    public function __construct(private PdfPageRenderer $pdfPageRenderer) {}
+    public function __construct(private PdfTextExtractor $pdfTextExtractor) {}
 
     public function isEnabled(): bool
     {
@@ -119,18 +118,15 @@ class FileEmbeddingService
         try {
             $pdfPath = $temporaryDirectory.'/source.pdf';
             $sourceHash = $this->copySourceToLocalFile($file, $pdfPath);
-            $pageFiles = $this->pdfPageRenderer->render($pdfPath, $temporaryDirectory.'/pages');
-            $pageImages = array_map(fn (array $page): Image => Image::fromPath($page['path']), $pageFiles);
+            $pages = $this->pdfTextExtractor->extract($pdfPath);
 
-            foreach ($pageFiles as $page) {
-                if (filesize($page['path']) > 20 * 1024 * 1024) {
-                    throw new RuntimeException('A rendered PDF page exceeds the supported image size.');
-                }
+            if ($pages === []) {
+                throw new RuntimeException('The PDF does not contain extractable text.');
             }
 
-            $vectors = $this->generate($pageImages);
+            $vectors = $this->generate(array_column($pages, 'content'));
 
-            if (count($vectors) !== count($pageFiles)) {
+            if (count($vectors) !== count($pages)) {
                 throw new RuntimeException('The embedding provider returned an unexpected vector count.');
             }
 
@@ -148,7 +144,7 @@ class FileEmbeddingService
                 }
             }
 
-            $this->persist($file, $pageFiles, $vectors, $sourceHash, $dimensions);
+            $this->persist($file, $pages, $vectors, $sourceHash, $dimensions);
 
             $file->forceFill([
                 'content_hash' => $sourceHash,
@@ -162,16 +158,16 @@ class FileEmbeddingService
         }
     }
 
-    /** @param array<int, Image> $images
+    /** @param array<int, string> $texts
      * @return array<int, array<float|int>>
      */
-    public function generate(array $images): array
+    public function generate(array $texts): array
     {
         if (! $this->isEnabled()) {
             throw new LogicException('File embeddings are disabled.');
         }
 
-        $response = Embeddings::for($images)
+        $response = Embeddings::for($texts)
             ->dimensions($this->dimensions())
             ->timeout((int) config('ai.file_embeddings.timeout', 40))
             ->generate(Lab::VoyageAI, (string) config('ai.providers.voyageai.models.embeddings.default'));
@@ -201,8 +197,8 @@ class FileEmbeddingService
             throw new RuntimeException('The VoyageAI API key is not configured.');
         }
 
-        if (! in_array((string) config('ai.providers.voyageai.models.embeddings.default'), ['voyage-multimodal-3', 'voyage-multimodal-3.5'], true)) {
-            throw new RuntimeException('The configured VoyageAI model does not support image embeddings.');
+        if (! in_array((string) config('ai.providers.voyageai.models.embeddings.default'), ['voyage-4-large', 'voyage-4', 'voyage-4-lite'], true)) {
+            throw new RuntimeException('The configured VoyageAI model does not support text embeddings.');
         }
 
         if ($this->dimensions() !== 1024) {
@@ -260,24 +256,24 @@ class FileEmbeddingService
         return $sourceHash;
     }
 
-    /** @param array<int, array{page: int, path: string}> $pageFiles
+    /** @param array<int, array{page: int, content: string}> $pages
      * @param  array<int, array<float|int>>  $vectors
      */
-    private function persist(ProgramFile|SubjectFile $file, array $pageFiles, array $vectors, string $sourceHash, int $dimensions): void
+    private function persist(ProgramFile|SubjectFile $file, array $pages, array $vectors, string $sourceHash, int $dimensions): void
     {
         $isSubjectFile = $file instanceof SubjectFile;
         $sourceKey = ($isSubjectFile ? 'subject_file:' : 'program_file:').$file->getKey();
         $programFileId = $isSubjectFile ? null : $file->getKey();
         $subjectFileId = $isSubjectFile ? $file->getKey() : null;
 
-        DB::transaction(function () use ($pageFiles, $vectors, $sourceHash, $dimensions, $sourceKey, $programFileId, $subjectFileId): void {
+        DB::transaction(function () use ($pages, $vectors, $sourceHash, $dimensions, $sourceKey, $programFileId, $subjectFileId): void {
             FilePageEmbedding::query()->where('source_key', $sourceKey)->delete();
 
-            foreach ($pageFiles as $index => $page) {
+            foreach ($pages as $index => $page) {
                 $now = now();
 
                 DB::insert(
-                    'INSERT INTO file_page_embeddings (program_file_id, subject_file_id, source_key, page_number, source_hash, provider, model, dimensions, embedding, embedded_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::vector, ?, ?, ?)',
+                    'INSERT INTO file_page_embeddings (program_file_id, subject_file_id, source_key, page_number, source_hash, provider, model, dimensions, content, embedding, embedded_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::vector, ?, ?, ?)',
                     [
                         $programFileId,
                         $subjectFileId,
@@ -287,6 +283,7 @@ class FileEmbeddingService
                         'voyageai',
                         (string) config('ai.providers.voyageai.models.embeddings.default'),
                         $dimensions,
+                        $page['content'],
                         json_encode($vectors[$index], JSON_THROW_ON_ERROR),
                         $now,
                         $now,

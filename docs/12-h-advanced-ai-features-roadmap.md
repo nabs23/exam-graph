@@ -12,14 +12,14 @@ Help reviewers create a structured set of instructional concepts for a subject b
 
 ### Why this follows the embedding foundation
 
-The basic MVP stores page-level multimodal vectors, but vectors alone do not provide text or citations to an LLM. RAG needs a page-aware text extraction and chunking pipeline in addition to vector storage. It also needs a reviewer workflow and a structured-output contract. These are intentional later steps, not reasons to expand the basic embedding MVP.
+The basic MVP stores page-level text and text vectors, but its page-sized evidence is too broad for reliable RAG. RAG needs a reviewer-controlled chunking pipeline in addition to vector storage. It also needs a reviewer workflow and a structured-output contract. These are intentional later steps, not reasons to expand the basic embedding MVP.
 
 ### Proposed workflow
 
 1. A reviewer selects one subject and the specific uploaded files that may be used as evidence.
-2. The ingestion workflow extracts the PDF text layer page by page and runs OCR only for pages without usable text. It retains the original wording, page number, file ID, file hash/version, extraction method, and warnings. Unsupported or low-quality pages are flagged for review.
+2. The ingestion workflow reuses the stored PDF text layer page by page and runs OCR only for pages without usable text after OCR is approved. It retains the original wording, page number, file ID, file hash/version, extraction method, and warnings. Unsupported or low-quality pages are flagged for review.
 3. The application divides approved extracted text into bounded, page-aware chunks. Each chunk remains traceable to its subject file and page range. A reviewer can exclude unsuitable material.
-4. The application creates text embeddings for those chunks and stores them in pgvector with the subject/file/page filters needed for retrieval. Reuse the VoyageAI multimodal space only after a retrieval-quality spike confirms text queries retrieve the intended text and image evidence with the installed SDK. If not, document and approve the smallest adapter or model change before building the feature.
+4. The application creates text embeddings for those chunks and stores them in pgvector with the subject/file/page filters needed for retrieval. Evaluate the chosen text model against the expected queries before building the feature.
 5. For a subject and optional approved syllabus topic, the reviewer requests concept candidates. Retrieval is restricted to the selected subject and approved files; the response cannot draw evidence from another subject.
 6. The LLM receives only the retrieved evidence and a versioned structured-output schema. Each proposed concept includes a stable draft identifier, title, concise definition, learning objectives, source chunk/page citations, and uncertainty notes. Prerequisite edges are excluded from the first RAG iteration.
 7. Application validation verifies schema shape and that every cited chunk was in the retrieval result. The reviewer compares each proposal with the source pages and can edit, approve, reject, or request another draft.

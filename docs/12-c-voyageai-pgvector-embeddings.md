@@ -1,24 +1,24 @@
-# 12-C — VoyageAI Multimodal Embeddings in PostgreSQL
+# 12-C — VoyageAI Text Embeddings in PostgreSQL
 
 ## Goal
 
-Create and persist page-level multimodal vectors for eligible program and subject files. This is the first and only AI feature in the MVP. Search, retrieval, extraction, and generation are later work.
+Create and persist page-level text vectors for eligible program and subject PDFs. This is the first and only AI feature in the MVP. Search, retrieval, semantic chunking, and generation are later work.
 
 ## Infrastructure gate
 
 - The current application configuration defaults to SQLite. pgvector requires PostgreSQL; explicitly configure and provision PostgreSQL for the target environment before implementing or enabling vector writes.
 - Install/enable the pgvector extension in each target database and verify it during deployment. Do not assume that the PostgreSQL server includes the extension.
-- Select the VoyageAI multimodal model and output dimension before writing the vector migration. The current candidate is `voyage-multimodal-3.5` at 1024 dimensions; treat model name and dimensions as configuration and validate that the database column matches them.
-- Configure the VoyageAI API key as a secret, plus the model, dimensions, maximum page size/pixels, feature flag, and bounded job retry settings.
+- Select the VoyageAI text model and output dimension before writing the vector migration. The current candidate is `voyage-4` at 1024 dimensions; treat model name and dimensions as configuration and validate that the database column matches them.
+- Configure the VoyageAI API key as a secret, plus the model, dimensions, maximum page count, text-extractor binary, feature flag, and bounded job retry settings.
 
 ## MVP workflow
 
 1. An authorized administrator requests embedding for an uploaded program or subject file.
 2. The job validates file status, MIME/content, hash, and supported format. It reads the object from private storage.
-3. A raster image becomes one image input. A PDF is rendered to one image per page; each page is sent as an image input. Preserve the original page number. Do not send the raw PDF as if VoyageAI accepted it as a document input.
-4. `FileEmbeddingService` calls the installed Laravel AI SDK `Embeddings` API with VoyageAI and the multimodal model. The installed SDK accepts image file inputs and routes the multimodal model to VoyageAI's multimodal endpoint; it does not currently expose an `input_type` setting, so do not assume document-mode prompting is applied.
-5. Validate response count and vector length, then store one vector per source page with file identity, content hash, provider/model, dimensions, and timestamps.
-6. Clean up temporary page images whether the request succeeds or fails. Mark the file's embedding state complete only when all required pages have vectors.
+3. The job extracts the PDF text layer page by page with `pdftotext`. It preserves the original page number, excludes empty pages, and fails safely when no usable text exists. Do not send the raw PDF to the embedding endpoint.
+4. `FileEmbeddingService` calls the installed Laravel AI SDK `Embeddings` API with VoyageAI and the configured text model, supplying the extracted page text strings.
+5. Validate response count and vector length, then store one vector and the corresponding extracted text per usable source page with file identity, content hash, provider/model, dimensions, and timestamps.
+6. Clean up the temporary local PDF whether the request succeeds or fails. Mark the file complete only when every extracted page has a valid vector.
 7. On content/configuration change, make old vectors inactive and re-embed. Keep the work idempotent across queue retries.
 
 ## Minimal storage design
@@ -34,6 +34,7 @@ content_hash
 provider
 model
 dimensions
+content text
 embedding vector(1024)  # dimension follows the approved model configuration
 embedded_at
 created_at
@@ -55,7 +56,7 @@ Keep processing status on the existing file record if that fits its lifecycle co
 ## Acceptance criteria
 
 - A deployment check confirms PostgreSQL, pgvector, and the configured vector dimension.
-- An eligible image and a multi-page PDF each produce the expected number of page vectors, retaining source file/page provenance.
+- A multi-page text PDF produces the expected number of page vectors, retaining source file/page provenance and extracted text.
 - Repeating a job does not create duplicate active vectors; changed file content or embedding configuration creates a clean replacement set.
 - Unsupported input, malformed provider output, provider outage, and cleanup failure produce safe, recoverable states.
 - Automated tests use Laravel AI SDK fakes and a PostgreSQL/pgvector integration environment for the vector-column path.

@@ -16,7 +16,7 @@ export default function SubjectFileShow({
 }: {
     file: SourceFile & { subject: { id: number; name: string; code: string } };
     fileEmbeddingsEnabled: boolean;
-    embeddingPreviews: { page_number: number; model: string; dimensions: number; values: number[] }[];
+    embeddingPreviews: { page_number: number; model: string; dimensions: number; excerpt: string; values: number[] }[];
     embeddingDataBytes: number | null;
     embeddingPageCount: number | null;
 }) {
@@ -81,9 +81,9 @@ export default function SubjectFileShow({
             {fileEmbeddingsEnabled && (
                 <section className="space-y-4 rounded-xl border bg-card p-5 shadow-sm">
                     <div>
-                        <h2 className="font-semibold">Multimodal embeddings</h2>
+                        <h2 className="font-semibold">Text embeddings</h2>
                         <p className="text-sm text-muted-foreground">
-                            Create one VoyageAI vector for each page of this PDF.
+                            Extract each PDF page’s text and create one VoyageAI vector for every page with usable text.
                         </p>
                     </div>
                     <p className="text-sm" aria-live="polite">
@@ -101,7 +101,7 @@ export default function SubjectFileShow({
                     )}
                     {embeddingPreviews.length > 0 && (
                         <div className="space-y-3">
-                            <h3 className="text-sm font-medium">Saved vector preview</h3>
+                            <h3 className="text-sm font-medium">Saved text embedding preview</h3>
                             {embeddingDataBytes !== null && (
                                 <p className="text-sm text-muted-foreground">
                                     Stored vector payload: {formatBytes(embeddingDataBytes)} across {embeddingPageCount} pages.
@@ -110,6 +110,7 @@ export default function SubjectFileShow({
                             {embeddingPreviews.map((preview) => (
                                 <div key={preview.page_number} className="rounded-md bg-muted p-3 text-sm">
                                     <p>Page {preview.page_number} · {preview.model} · {preview.dimensions} dimensions</p>
+                                    <p className="mt-1 text-muted-foreground">{preview.excerpt}</p>
                                     <code className="mt-1 block break-all text-xs text-muted-foreground">
                                         [{preview.values.map((value) => Number(value).toFixed(5)).join(', ')}, …]
                                     </code>

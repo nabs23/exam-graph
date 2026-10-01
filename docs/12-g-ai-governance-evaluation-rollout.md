@@ -2,13 +2,13 @@
 
 ## Goal
 
-Enable one bounded AI workflow safely: create VoyageAI multimodal page embeddings for selected program and subject files and store them in PostgreSQL with pgvector.
+Enable one bounded AI workflow safely: create VoyageAI text page embeddings for selected program and subject PDFs and store them in PostgreSQL with pgvector.
 
 ## MVP evaluation
 
 Use a small rights-cleared set of representative program and subject files. Verify:
 
-- supported file/page detection and PDF page-rendering completeness;
+- supported file/page detection and PDF text-extraction completeness;
 - expected page/vector count and source file/page provenance;
 - provider/model/dimension consistency;
 - idempotency, replacement after content changes, and retry behavior;
@@ -21,14 +21,14 @@ Do not define retrieval recall, extraction accuracy, citation accuracy, lesson q
 
 - Confirm rights to send each selected file to VoyageAI and review the provider account’s current data handling and retention terms before production use.
 - Keep S3 private and authorize every embedding request against the owning program or subject.
-- Do not log source bytes, page images, signed URLs, API keys, or full provider error payloads.
-- Delete temporary rendered pages after processing, including on job failure.
+- Do not log source bytes, extracted page text, signed URLs, API keys, or full provider error payloads.
+- Delete the temporary local PDF after processing, including on job failure.
 - Keep provider credentials and model settings in managed environment configuration.
 - Document the retention/deletion behavior for embeddings when a source file is deleted or archived.
 
 ## MVP test scope
 
-Use Laravel AI SDK embedding fakes for job/service behavior. Cover authorized and unauthorized requests, unsupported file types, multi-page completion, duplicate dispatch, changed content/model, provider failure, safe failure state, and deletion cleanup. Exercise the pgvector migration and dimension path against PostgreSQL with pgvector; SQLite is not a substitute for that deployment check.
+Use Laravel AI SDK embedding fakes for job/service behavior. Cover authorized and unauthorized requests, unsupported file types, multi-page text extraction and completion, PDFs without usable text, duplicate dispatch, changed content/model, provider failure, safe failure state, and deletion cleanup. Exercise the pgvector migration and dimension path against PostgreSQL with pgvector; SQLite is not a substitute for that deployment check.
 
 ## Release gates
 

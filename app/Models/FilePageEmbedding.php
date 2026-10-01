@@ -16,6 +16,7 @@ class FilePageEmbedding extends Model
         'provider',
         'model',
         'dimensions',
+        'content',
         'embedding',
         'embedded_at',
     ];

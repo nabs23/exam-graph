@@ -80,11 +80,12 @@ class SubjectFileController extends Controller
             $embeddingPreviews = $subjectFile->pageEmbeddings()
                 ->orderBy('page_number')
                 ->limit(5)
-                ->get(['page_number', 'model', 'dimensions', 'embedding'])
+                ->get(['page_number', 'model', 'dimensions', 'content', 'embedding'])
                 ->map(fn ($embedding): array => [
                     'page_number' => $embedding->page_number,
                     'model' => $embedding->model,
                     'dimensions' => $embedding->dimensions,
+                    'excerpt' => str($embedding->content ?? '')->squish()->limit(180)->toString(),
                     'values' => array_slice($embedding->embedding ?? [], 0, 8),
                 ]);
 

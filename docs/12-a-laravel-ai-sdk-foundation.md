@@ -1,13 +1,13 @@
-# 12-A — Laravel AI SDK Foundation for File Embeddings
+# 12-A — Laravel AI SDK Foundation for Text File Embeddings
 
 ## Goal
 
-Establish only the foundation needed to create VoyageAI multimodal embeddings for existing program and subject files and persist them in PostgreSQL with pgvector.
+Establish only the foundation needed to create VoyageAI text embeddings from existing program and subject PDFs and persist them in PostgreSQL with pgvector.
 
 ## MVP scope
 
 - Use the installed Laravel AI SDK (`laravel/ai` 1.x) as the VoyageAI provider boundary.
-- Configure the VoyageAI credentials and one multimodal embedding model through environment-backed configuration.
+- Configure the VoyageAI credentials and one text embedding model through environment-backed configuration.
 - Add the smallest application service and queued job needed to embed an explicitly selected `ProgramFile` or `SubjectFile`.
 - Record file/page identity, model, dimensions, content hash, status, timestamps, and a safe failure category.
 - Keep embedding disabled unless PostgreSQL, pgvector, provider configuration, and the embedding feature flag are available.
@@ -19,7 +19,7 @@ Do not add AI agents, chat, text generation, curriculum extraction, lesson or qu
 
 ## Design
 
-Use one focused `FileEmbeddingService` plus a queued job. The service accepts an eligible uploaded file, creates page-level image inputs, calls `Embeddings::for(...)->generate()` with the VoyageAI provider and configured multimodal model, and persists validated vectors and provenance. Controllers must not call the provider or persist raw provider responses.
+Use one focused `FileEmbeddingService` plus a queued job. The service accepts an eligible uploaded PDF, extracts its text layer page by page, calls `Embeddings::for(...)->generate()` with the VoyageAI provider and configured text model, and persists validated vectors, extracted page text, and provenance. Controllers must not call the provider or persist raw provider responses.
 
 Reuse the existing `ProgramFile` and `SubjectFile` records as the source of truth for ownership and S3 location. Store embedding rows separately so re-embedding can replace vectors without modifying uploaded files. Do not store source bytes, signed URLs, or provider credentials in embedding records or logs.
 
@@ -27,7 +27,7 @@ Reuse the existing `ProgramFile` and `SubjectFile` records as the source of trut
 
 - An authorized administrator can request embedding for an uploaded eligible program or subject file.
 - The job can be retried safely and does not create duplicate page embeddings for the same file version, page, model, and dimensions.
-- A failed page is visible as a safe processing failure and can be retried.
+- A PDF without usable extracted text, or a provider failure, is visible as a safe processing failure and can be retried.
 - Provider/model/dimension configuration is explicit and vectors cannot be mixed across incompatible configurations.
 - The workflow refuses to run if the database is not PostgreSQL with pgvector enabled or required configuration is missing.
 

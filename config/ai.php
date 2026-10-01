@@ -44,7 +44,7 @@ return [
         'enabled' => (bool) env('AI_FILE_EMBEDDINGS_ENABLED', false),
         'pdf_page_limit' => (int) env('AI_FILE_EMBEDDINGS_PDF_PAGE_LIMIT', 50),
         'pdfinfo_binary' => env('AI_FILE_EMBEDDINGS_PDFINFO_BINARY', 'pdfinfo'),
-        'pdftoppm_binary' => env('AI_FILE_EMBEDDINGS_PDFTOPPM_BINARY', 'pdftoppm'),
+        'pdftotext_binary' => env('AI_FILE_EMBEDDINGS_PDFTOTEXT_BINARY', 'pdftotext'),
         'timeout' => (int) env('AI_FILE_EMBEDDINGS_TIMEOUT', 40),
     ],
 
@@ -163,7 +163,7 @@ return [
             'key' => env('VOYAGEAI_API_KEY'),
             'models' => [
                 'embeddings' => [
-                    'default' => env('VOYAGEAI_EMBEDDING_MODEL', 'voyage-multimodal-3.5'),
+                    'default' => env('VOYAGEAI_EMBEDDING_MODEL', 'voyage-4'),
                     'dimensions' => (int) env('VOYAGEAI_EMBEDDING_DIMENSIONS', 1024),
                 ],
             ],

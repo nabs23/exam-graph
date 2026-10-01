@@ -2,7 +2,7 @@
 
 ## Goal
 
-Use the existing private program-file and subject-file library as the input boundary for the first AI MVP. This stage adds no new source-document, extracted-text, chunk-mapping, or curriculum model.
+Use the existing private program-file and subject-file library as the input boundary for the first AI MVP. This stage extracts the existing PDF text layer page by page; it adds no source-document, semantic-chunk, curriculum, or OCR model.
 
 ## Input contract
 
@@ -10,14 +10,13 @@ Use the existing private program-file and subject-file library as the input boun
 2. The application authorizes access to the owning program or subject and verifies the file is in its completed upload state.
 3. The application computes or verifies a content hash, validates the actual content type, and dispatches an idempotent embedding job.
 4. The job reads the private object through its configured storage disk. It never accepts a browser-supplied storage key or public URL.
-5. The resulting page images and vectors are associated with the source file record and original page number.
+5. The extracted page text and resulting vectors are associated with the source file record and original page number.
 
 ## MVP file support
 
-- Raster image files supported by VoyageAI multimodal embeddings may be embedded directly as one page/image.
-- PDF files may be rendered to one image per page and embedded page by page. Keep the original PDF in private object storage; temporary rendered images are processing artifacts and must be removed after use.
-- DOCX, EPUB, OCR, text extraction, tables-to-text conversion, semantic chunking, and video are out of scope for this MVP. Leave those uploads available for ordinary file management, but show embedding as unsupported for them.
-- Apply provider image size/pixel constraints before sending a page. Oversized or unrenderable pages fail visibly and can be retried after correction; do not silently skip them.
+- PDFs with a usable text layer are extracted page by page and embedded as text. Keep the original PDF in private object storage; the local copy used for extraction is a temporary processing artifact and must be removed after use.
+- DOCX, EPUB, image-only PDFs, OCR, tables-to-text conversion, semantic chunking, and video are out of scope for this MVP. Leave those uploads available for ordinary file management, but show embedding as unsupported or failed with a safe error category.
+- Preserve original page numbers. Skip pages that have no usable text; fail the file when no page yields usable text.
 
 ## Provenance and lifecycle
 
@@ -35,4 +34,4 @@ Use the existing private program-file and subject-file library as the input boun
 
 ## Dependencies
 
-Requires the existing program/subject file CRUD and the narrow SDK foundation in 12-A. This stage ends at validated source-file and page-image inputs; it does not produce extracted text or curriculum mappings.
+Requires the existing program/subject file CRUD and the narrow SDK foundation in 12-A. This stage ends at validated source-file, page-text, and vector inputs; it does not produce semantic chunks or curriculum mappings.

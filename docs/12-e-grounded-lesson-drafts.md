@@ -2,7 +2,7 @@
 
 ## Status
 
-Lesson generation is outside the first AI MVP. The MVP creates VoyageAI multimodal embeddings for program and subject files and stores them in PostgreSQL with pgvector; it does not retrieve evidence or call a text-generation model.
+Lesson generation is outside the first AI MVP. The MVP creates VoyageAI text embeddings for program and subject PDFs and stores them in PostgreSQL with pgvector; it does not retrieve evidence or call a text-generation model.
 
 ## Future prerequisite
 
