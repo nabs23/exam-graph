@@ -22,7 +22,7 @@ Use the existing private program-file and subject-file library as the input boun
 
 - Each page embedding retains the source file ID, page number, content hash, model, dimensions, and processing timestamps.
 - An uploaded file is immutable. A replacement upload is a new file record and receives its own embeddings.
-- Editing display metadata does not invalidate vectors. Replacing file bytes or changing the configured model/dimensions requires re-embedding.
+- Editing display metadata does not invalidate vectors. Replacing file bytes or changing the configured model requires re-embedding. The fixed 1024-dimension vector column requires a schema migration before a dimension change can be enabled and re-embedded.
 - Deleting or archiving a file must also delete or deactivate its page embeddings.
 - Do not approve, publish, or map source content to curriculum concepts in this stage.
 

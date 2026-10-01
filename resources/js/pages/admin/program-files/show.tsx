@@ -91,7 +91,9 @@ export default function ProgramFileShow({
                     </p>
                     {file.embedding_status === 'failed' && (
                         <p role="alert" className="text-sm text-destructive">
-                            Embedding failed. You can retry this file.
+                            {file.embedding_error_code === 'no_extractable_text'
+                                ? 'No readable text was found in this PDF. Upload a PDF with a text layer, then retry.'
+                                : 'Embedding failed. You can retry this file.'}
                         </p>
                     )}
                     {file.mime_type !== 'application/pdf' && (

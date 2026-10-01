@@ -2,6 +2,7 @@
 
 use App\FileEmbeddingStatus;
 use App\Jobs\EmbedSourceFile;
+use App\Models\FilePageEmbedding;
 use App\Models\Program;
 use App\Models\ProgramFile;
 use App\Models\Subject;
@@ -77,13 +78,13 @@ test('embedding requests are hidden while file embeddings are disabled', functio
 
     $this->assertDatabaseHas('program_files', [
         'id' => $file->id,
-        'embedding_status' => FileEmbeddingStatus::NotRequested->value,
+        'embedding_status' => FileEmbeddingStatus::Supported->value,
     ]);
 
     Queue::assertNothingPushed();
 });
 
-test('non-PDF source files are marked unsupported without contacting the provider', function () {
+test('content managers can request embedding assessment for a non-PDF source file', function () {
     config(['ai.file_embeddings.enabled' => true]);
     Queue::fake([EmbedSourceFile::class]);
     Embeddings::fake();
@@ -103,6 +104,11 @@ test('non-PDF source files are marked unsupported without contacting the provide
 
     Queue::assertNothingPushed();
     Embeddings::assertNothingGenerated();
+});
+
+test('only PDFs are supported for text embedding', function () {
+    expect(FileEmbeddingStatus::forMimeType('application/pdf'))->toBe(FileEmbeddingStatus::Supported)
+        ->and(FileEmbeddingStatus::forMimeType('application/vnd.openxmlformats-officedocument.wordprocessingml.document'))->toBe(FileEmbeddingStatus::Unsupported);
 });
 
 test('embedding generation uses the configured VoyageAI text model', function () {
@@ -141,6 +147,26 @@ test('PDF text extraction preserves page numbers and excludes empty pages', func
 
     Process::assertRan(fn ($process): bool => in_array('pdfinfo', $process->command, true));
     Process::assertRan(fn ($process): bool => in_array('pdftotext', $process->command, true));
+});
+
+test('deleting a source file deletes its page embeddings', function () {
+    $file = ProgramFile::factory()->create();
+    $embedding = FilePageEmbedding::query()->create([
+        'program_file_id' => $file->id,
+        'source_key' => 'program_file:'.$file->id,
+        'page_number' => 1,
+        'source_hash' => str_repeat('a', 64),
+        'provider' => 'voyageai',
+        'model' => 'voyage-4',
+        'dimensions' => 1024,
+        'content' => 'Revenue is recognized when control transfers.',
+        'embedding' => array_fill(0, 1024, 0.0),
+        'embedded_at' => now(),
+    ]);
+
+    $file->delete();
+
+    $this->assertDatabaseMissing('file_page_embeddings', ['id' => $embedding->id]);
 });
 
 test('content managers cannot queue embeddings for files they cannot manage', function () {

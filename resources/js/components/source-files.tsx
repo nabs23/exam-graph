@@ -13,7 +13,7 @@ export type SourceFile = {
     mime_type: string | null;
     file_size: number | null;
     upload_status: string;
-    embedding_status: 'not_requested' | 'queued' | 'processing' | 'complete' | 'unsupported' | 'failed';
+    embedding_status: 'not_requested' | 'supported' | 'queued' | 'processing' | 'complete' | 'unsupported' | 'failed';
     embedding_error_code: string | null;
     embedding_model: string | null;
     uploaded_at: string | null;

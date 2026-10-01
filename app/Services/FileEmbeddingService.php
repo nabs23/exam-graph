@@ -121,7 +121,12 @@ class FileEmbeddingService
             $pages = $this->pdfTextExtractor->extract($pdfPath);
 
             if ($pages === []) {
-                throw new RuntimeException('The PDF does not contain extractable text.');
+                $file->forceFill([
+                    'embedding_status' => FileEmbeddingStatus::Failed,
+                    'embedding_error_code' => 'no_extractable_text',
+                ])->save();
+
+                return;
             }
 
             $vectors = $this->generate(array_column($pages, 'content'));

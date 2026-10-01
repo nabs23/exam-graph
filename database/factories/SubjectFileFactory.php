@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\FileEmbeddingStatus;
 use App\FileUploadStatus;
 use App\Models\Subject;
 use App\Models\SubjectFile;
@@ -30,6 +31,7 @@ class SubjectFileFactory extends Factory
             'mime_type' => 'application/pdf',
             'file_size' => 1024,
             'upload_status' => FileUploadStatus::Uploaded,
+            'embedding_status' => FileEmbeddingStatus::Supported,
             'uploaded_at' => now(),
             'metadata' => [],
         ];

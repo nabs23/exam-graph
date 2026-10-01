@@ -62,7 +62,16 @@ class ProgramFileController extends Controller
             abort(422, 'The uploaded object did not match its declared size and content type.');
         }
 
-        $programFile->forceFill(['upload_status' => FileUploadStatus::Uploaded, 'file_size' => $size, 'mime_type' => $mime, 'uploaded_at' => now()])->save();
+        $embeddingStatus = FileEmbeddingStatus::forMimeType($mime);
+
+        $programFile->forceFill([
+            'upload_status' => FileUploadStatus::Uploaded,
+            'file_size' => $size,
+            'mime_type' => $mime,
+            'uploaded_at' => now(),
+            'embedding_status' => $embeddingStatus,
+            'embedding_error_code' => $embeddingStatus === FileEmbeddingStatus::Unsupported ? 'unsupported_file_type' : null,
+        ])->save();
 
         return response()->json($programFile->load('uploader:id,name')->makeHidden(['storage_key', 'storage_disk']));
     }

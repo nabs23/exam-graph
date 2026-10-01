@@ -1,5 +1,6 @@
 <?php
 
+use App\FileEmbeddingStatus;
 use App\FileUploadStatus;
 use App\Models\Program;
 use App\Models\ProgramFile;
@@ -90,6 +91,7 @@ test('content managers can verify an uploaded program file', function () {
     $this->assertDatabaseHas('program_files', [
         'id' => $file->id,
         'upload_status' => FileUploadStatus::Uploaded->value,
+        'embedding_status' => FileEmbeddingStatus::Supported->value,
     ]);
 });
 
