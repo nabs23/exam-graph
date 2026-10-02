@@ -18,6 +18,7 @@ This directory contains the product, curriculum, architecture, requirements, and
 12. [AI integration plan](12-laravel-ai-sdk-integration-plan.md), which separates the basic VoyageAI file-embedding MVP from later AI work
 13. [Advanced AI features roadmap](12-h-advanced-ai-features-roadmap.md), starting with subject-scoped RAG for structured concept drafts
 14. [CI/CD setup guide](13-ci-cd-setup-guide.md)
+15. [Curriculum extraction handoff checklist](next-tasks-handoff.md)
 
 ## Directory Contents
 
@@ -52,6 +53,7 @@ docs/
 | Planning | [12-G — Embedding MVP Governance](12-g-ai-governance-evaluation-rollout.md) | Evaluation, security/privacy review, and rollout gates for file embeddings only. |
 | Planning | [12-H — Advanced AI Features Roadmap](12-h-advanced-ai-features-roadmap.md) | First advanced priority: subject-scoped RAG that drafts structured concepts for reviewer approval. |
 | Operations | [13 — CI/CD Setup Guide](13-ci-cd-setup-guide.md) | GitHub Actions, Docker Hub, and Coolify setup for testing and deployment. |
+| Planning | [Curriculum Extraction Handoff Checklist](next-tasks-handoff.md) | Records the completed workflow, environment verification steps, known operational follow-ups, and next product decisions. |
 
 ## How to Use These Documents
 
