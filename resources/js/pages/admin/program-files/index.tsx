@@ -1,5 +1,5 @@
 import { Head, Link } from "@inertiajs/react";
-import { SourceFile } from "@/components/source-files";
+import { SourceFile, SourceFileDeleteButton, useFileEmbeddingPolling } from "@/components/source-files";
 import programs from "@/routes/programs";
 import programFiles from "@/routes/program-files";
 import programUploads from "@/routes/programs/files";
@@ -11,6 +11,8 @@ export default function ProgramFilesIndex({
     program: { id: number; name: string; code: string };
     files: SourceFile[];
 }) {
+    useFileEmbeddingPolling(files.some((file) => file.upload_status === 'delete_pending'), ['files']);
+
     return (
         <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
             <Head title={`${program.name} files`} />
@@ -50,10 +52,10 @@ export default function ProgramFilesIndex({
                 ) : (
                     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         {files.map((file) => (
-                            <li key={file.id}>
+                            <li key={file.id} className="flex flex-col rounded-xl border bg-card shadow-sm">
                                 <Link
                                     href={programFiles.show(file.id)}
-                                    className="block h-full rounded-xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
+                                    className="block flex-1 rounded-t-xl p-5 transition-colors hover:bg-accent"
                                 >
                                     <div className="flex items-start justify-between gap-3">
                                         <h3 className="font-semibold leading-snug">
@@ -63,15 +65,44 @@ export default function ProgramFilesIndex({
                                             {file.upload_status.replaceAll("_", " ")}
                                         </span>
                                     </div>
-                                    <p className="mt-2 break-all text-sm text-muted-foreground">
-                                        {file.original_filename}
-                                    </p>
-                                    {file.file_type && (
-                                        <p className="mt-3 text-xs text-muted-foreground">
-                                            {file.file_type.replaceAll("_", " ")}
-                                        </p>
-                                    )}
+                                    <dl className="mt-3 space-y-2 text-sm">
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">File type</dt>
+                                            <dd className="capitalize">{file.file_type?.replaceAll("_", " ") ?? "Program file"}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">Original filename</dt>
+                                            <dd className="break-all">{file.original_filename}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">Embeddings</dt>
+                                            <dd className="capitalize">{file.embedding_status.replaceAll("_", " ")}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">File size</dt>
+                                            <dd>{file.file_size === null ? "Size pending" : `${(file.file_size / 1048576).toFixed(1)} MiB`}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">Uploaded</dt>
+                                            <dd>
+                                                {file.uploaded_at
+                                                    ? new Date(file.uploaded_at).toLocaleDateString(undefined, {
+                                                        year: "numeric",
+                                                        month: "short",
+                                                        day: "numeric",
+                                                    })
+                                                    : file.upload_status.replaceAll("_", " ")}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-muted-foreground">Uploaded by</dt>
+                                            <dd>{file.uploader?.name ?? "Unknown"}</dd>
+                                        </div>
+                                    </dl>
                                 </Link>
+                                <div className="px-5 pb-5">
+                                    <SourceFileDeleteButton file={file} kind="program" />
+                                </div>
                             </li>
                         ))}
                     </ul>

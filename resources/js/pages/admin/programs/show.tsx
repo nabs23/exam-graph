@@ -1,7 +1,7 @@
 import { Head, Link } from "@inertiajs/react";
 import { SourceFiles } from "@/components/source-files";
 import programs from "@/routes/programs";
-import subjects from "@/routes/subjects";
+import { programSubjects, subjects } from '@/lib/curriculum-routes';
 
 export default function Program({
     program,
@@ -11,7 +11,7 @@ export default function Program({
         name: string;
         code: string;
         description: string | null;
-        subjects: { id: number; name: string; code: string }[];
+        subjects: { id: number; name: string; code: string | null }[];
         files: import("@/components/source-files").SourceFile[];
     };
 }) {
@@ -40,7 +40,7 @@ export default function Program({
             <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Subjects</h2>
                 <Link
-                    href={subjects.create()}
+                    href={programSubjects.create(program)}
                     className="text-sm font-medium text-primary hover:underline"
                 >
                     Create a subject
@@ -53,7 +53,7 @@ export default function Program({
                         href={subjects.show(subject)}
                         className="rounded-xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
                     >
-                        <b>{subject.code}</b>
+                        {subject.code && <b>{subject.code}</b>}
                         <p className="mt-1 font-medium">{subject.name}</p>
                     </Link>
                 ))}

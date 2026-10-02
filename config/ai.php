@@ -42,7 +42,8 @@ return [
 
     'file_embeddings' => [
         'enabled' => (bool) env('AI_FILE_EMBEDDINGS_ENABLED', false),
-        'pdf_page_limit' => (int) env('AI_FILE_EMBEDDINGS_PDF_PAGE_LIMIT', 50),
+        'pdf_page_limit' => (int) env('AI_FILE_EMBEDDINGS_PDF_PAGE_LIMIT', 100),
+        'batch_size' => (int) env('AI_FILE_EMBEDDINGS_BATCH_SIZE', 8),
         'pdfinfo_binary' => env('AI_FILE_EMBEDDINGS_PDFINFO_BINARY', 'pdfinfo'),
         'pdfinfo_timeout' => (int) env('AI_FILE_EMBEDDINGS_PDFINFO_TIMEOUT', 10),
         'pdftotext_binary' => env('AI_FILE_EMBEDDINGS_PDFTOTEXT_BINARY', 'pdftotext'),
@@ -54,6 +55,20 @@ return [
             (int) env('AI_FILE_EMBEDDINGS_JOB_SECOND_BACKOFF', 30),
         ],
         'job_timeout' => (int) env('AI_FILE_EMBEDDINGS_JOB_TIMEOUT', 120),
+    ],
+
+    'official_curriculum' => [
+        'enabled' => (bool) env('AI_OFFICIAL_CURRICULUM_EXTRACTION_ENABLED', false),
+        'provider' => env('AI_OFFICIAL_CURRICULUM_PROVIDER', 'openai'),
+        'model' => env('AI_OFFICIAL_CURRICULUM_MODEL'),
+        'timeout' => (int) env('AI_OFFICIAL_CURRICULUM_TIMEOUT', 60),
+        'max_characters' => (int) env('AI_OFFICIAL_CURRICULUM_MAX_CHARACTERS', 120000),
+        'job_tries' => (int) env('AI_OFFICIAL_CURRICULUM_JOB_TRIES', 2),
+        'job_backoff' => [
+            (int) env('AI_OFFICIAL_CURRICULUM_JOB_INITIAL_BACKOFF', 15),
+            (int) env('AI_OFFICIAL_CURRICULUM_JOB_SECOND_BACKOFF', 45),
+        ],
+        'job_timeout' => (int) env('AI_OFFICIAL_CURRICULUM_JOB_TIMEOUT', 120),
     ],
 
     /*

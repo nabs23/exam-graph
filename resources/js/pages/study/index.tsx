@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type Subject = { id: number; name: string; code: string };
+type Subject = { id: number; name: string; code: string | null };
 type Program = { id: number; name: string; code: string; subjects: Subject[] };
 
 export default function StudyIndex({ programs }: { programs: Program[] }) {
@@ -54,7 +54,7 @@ export default function StudyIndex({ programs }: { programs: Program[] }) {
                                             href={study.subjects.show(subject)}
                                             className="group flex items-center justify-between rounded-lg border p-4 text-sm font-medium transition-colors hover:border-primary/40 hover:bg-accent"
                                         >
-                                            <span><Badge variant="outline" className="mr-2">{subject.code}</Badge>{subject.name}</span>
+                                            <span>{subject.code && <Badge variant="outline" className="mr-2">{subject.code}</Badge>}{subject.name}</span>
                                             <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
                                         </Link>
                                     ))}

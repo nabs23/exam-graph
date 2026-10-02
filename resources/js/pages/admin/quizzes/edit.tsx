@@ -1,8 +1,8 @@
 import type { ComponentProps } from 'react';
 import QuizForm from './_form';
-import quizzes from '@/routes/quizzes';
-import concepts from '@/routes/concepts';
-import conceptQuizzes from '@/routes/concepts/quizzes';
+import { quizzes } from '@/lib/curriculum-routes';
+import { concepts } from '@/lib/curriculum-routes';
+import { conceptQuizzes } from '@/lib/curriculum-routes';
 
 function EditQuizPage(props: ComponentProps<typeof QuizForm>) {
     return <QuizForm {...props} />;

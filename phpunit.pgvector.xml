@@ -7,6 +7,7 @@
     <testsuites>
         <testsuite name="Pgvector">
             <file>tests/Feature/PgvectorFileEmbeddingTest.php</file>
+            <file>tests/Feature/PgvectorCurriculumExtractionTest.php</file>
         </testsuite>
     </testsuites>
     <php>

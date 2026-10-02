@@ -14,14 +14,14 @@ The existing application currently defaults to SQLite. PostgreSQL with pgvector 
 | 2 | [B — Program and subject file embedding inputs](12-b-source-documents-content-mapping.md) | Reuse existing private file records; define supported input and page provenance. |
 | 3 | [C — VoyageAI text embeddings in PostgreSQL](12-c-voyageai-pgvector-embeddings.md) | Extract PDF page text, generate vectors, and store them with pgvector. |
 | 4 | [G — Embedding MVP governance and rollout](12-g-ai-governance-evaluation-rollout.md) | Evaluate, secure, and pilot this single workflow. |
+| 5 | [D — Official curriculum extraction](12-d-curriculum-extraction-subjects-concepts.md) | Propose page-cited official subjects and syllabus topics from completed program-file text embeddings; publish only after reviewer action. |
 
 ## Later feature notes
 
-- [D — Curriculum extraction](12-d-curriculum-extraction-subjects-concepts.md)
 - [E — Grounded lesson drafts](12-e-grounded-lesson-drafts.md)
 - [F — Learner tutor and practice drafts](12-f-learner-tutor-practice-drafts.md)
 
-These documents are deferred placeholders. Detailed advanced AI scope, starting with RAG-assisted subject concept creation, is in [H — Advanced AI features roadmap](12-h-advanced-ai-features-roadmap.md). Do not implement these features as part of the basic MVP.
+E and F are deferred placeholders. Detailed advanced AI scope, starting with RAG-assisted subject concept creation, is in [H — Advanced AI features roadmap](12-h-advanced-ai-features-roadmap.md). The curriculum extraction workflow in D is separate from the basic embedding MVP.
 
 ## Shared MVP rules
 

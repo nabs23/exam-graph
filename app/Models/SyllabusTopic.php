@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\Models\HasCurriculumRoutes;
 use Database\Factories\SyllabusTopicFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,8 +11,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SyllabusTopic extends Model
 {
+    use HasCurriculumRoutes;
+
     /** @use HasFactory<SyllabusTopicFactory> */
     use HasFactory;
+
+    protected $appends = ['route_parameters'];
+
+    protected $with = ['subject'];
 
     protected $fillable = ['subject_id', 'parent_id', 'code', 'title', 'description', 'sort_order'];
 
@@ -33,5 +40,11 @@ class SyllabusTopic extends Model
     public function concepts(): HasMany
     {
         return $this->hasMany(Concept::class);
+    }
+
+    /** @return array<string, int> */
+    public function curriculumRouteParameters(): array
+    {
+        return $this->subject->curriculumRouteParameters() + ['topic' => (int) $this->id];
     }
 }

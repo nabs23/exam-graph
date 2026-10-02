@@ -1,13 +1,13 @@
 import type { ComponentProps } from 'react';
 import SubjectForm from './_form';
-import subjects from '@/routes/subjects';
+import { programSubjects, subjects } from '@/lib/curriculum-routes';
 
 function CreateSubjectPage(props: ComponentProps<typeof SubjectForm>) {
     return <SubjectForm {...props} />;
 }
 
-CreateSubjectPage.layout = () => ({
-    breadcrumbs: [{ title: 'Subjects', href: subjects.index() }, { title: 'New subject', href: subjects.create() }],
+CreateSubjectPage.layout = (props: ComponentProps<typeof SubjectForm>) => ({
+    breadcrumbs: [{ title: 'Subjects', href: props.contextProgram ? programSubjects.index(props.contextProgram) : subjects.index() }, { title: 'New subject', href: props.contextProgram ? programSubjects.create(props.contextProgram) : subjects.create() }],
 });
 
 export default CreateSubjectPage;

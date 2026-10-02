@@ -1,8 +1,10 @@
 import { Head, Link } from "@inertiajs/react";
-import concepts from "@/routes/concepts";
+import { concepts, subjectConcepts, topicConcepts } from '@/lib/curriculum-routes';
 
 export default function Concepts({
     concepts: items,
+    contextSubject,
+    contextTopic,
 }: {
     concepts: {
         id: number;
@@ -10,6 +12,8 @@ export default function Concepts({
         title: string;
         subject: { name: string };
     }[];
+    contextSubject?: { id: number } | null;
+    contextTopic?: { id: number } | null;
 }) {
     return (
         <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -17,7 +21,7 @@ export default function Concepts({
             <div className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-center sm:justify-between">
                 <div><p className="text-sm font-medium uppercase tracking-wide text-primary">Curriculum administration</p><h1 className="text-3xl font-semibold tracking-tight">Concepts</h1><p className="mt-1 text-muted-foreground">Manage teachable units, prerequisites, lessons, and assessments.</p></div>
                 <Link
-                    href={concepts.create()}
+                    href={contextTopic ? topicConcepts.create(contextTopic) : contextSubject ? subjectConcepts.create(contextSubject) : concepts.create()}
                     className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90"
                 >
                     New concept

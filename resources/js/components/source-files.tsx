@@ -1,9 +1,10 @@
-import { Link, router, usePoll } from "@inertiajs/react";
+import { Form, Link, router, usePoll } from "@inertiajs/react";
 import { useEffect, useState } from "react";
 import programFiles from "@/routes/program-files";
 import programUploads from "@/routes/programs/files";
 import subjectFiles from "@/routes/subject-files";
 import subjectUploads from "@/routes/subjects/files";
+import { Button } from "@/components/ui/button";
 
 export type SourceFile = {
     id: number;
@@ -20,6 +21,30 @@ export type SourceFile = {
     metadata?: Record<string, string> | null;
     uploader: { name: string } | null;
 };
+
+export function SourceFileDeleteButton({ file, kind }: { file: SourceFile; kind: 'program' | 'subject' }) {
+    const fileRoutes = kind === 'program' ? programFiles : subjectFiles;
+    const canDelete = ['uploaded', 'failed', 'delete_pending'].includes(file.upload_status);
+
+    return (
+        <Form
+            {...fileRoutes.destroy.form(file.id)}
+            onBefore={() => window.confirm(`Delete ${file.title}? This also deletes its extracted text and embedding vectors.`)}
+        >
+            {({ processing }) => (
+                <Button
+                    type="submit"
+                    variant="destructive"
+                    size="sm"
+                    disabled={!canDelete || processing}
+                    aria-label={`${file.upload_status === 'delete_pending' ? 'Retry deletion of' : 'Delete'} ${file.title}`}
+                >
+                    {processing ? 'Deleting…' : file.upload_status === 'delete_pending' ? 'Retry deletion' : 'Delete file'}
+                </Button>
+            )}
+        </Form>
+    );
+}
 
 export function useFileEmbeddingPolling(active: boolean, only: string[]) {
     const { start, stop } = usePoll(3000, { only }, {

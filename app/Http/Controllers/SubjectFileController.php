@@ -108,7 +108,7 @@ class SubjectFileController extends Controller
         }
 
         return Inertia::render('admin/subject-files/show', [
-            'file' => $subjectFile->load('uploader:id,name', 'subject:id,name,code')->makeHidden(['storage_key', 'storage_disk']),
+            'file' => $subjectFile->load('uploader:id,name', 'subject:id,program_id,name,code')->makeHidden(['storage_key', 'storage_disk']),
             'fileEmbeddingsEnabled' => $embeddingsAvailable,
             'embeddingPreviews' => $embeddingPreviews,
             'embeddingDataBytes' => $embeddingDataBytes,

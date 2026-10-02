@@ -10,6 +10,7 @@ use App\Jobs\DeleteProgramFile;
 use App\Models\Program;
 use App\Models\ProgramFile;
 use App\Services\FileEmbeddingService;
+use App\Services\OfficialCurriculumExtractionService;
 use App\Services\SourceFileStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -76,15 +77,16 @@ class ProgramFileController extends Controller
         return response()->json($programFile->load('uploader:id,name')->makeHidden(['storage_key', 'storage_disk']));
     }
 
-    public function show(ProgramFile $programFile, FileEmbeddingService $fileEmbeddingService): Response
+    public function show(ProgramFile $programFile, FileEmbeddingService $fileEmbeddingService, OfficialCurriculumExtractionService $curriculumExtractionService): Response
     {
         $embeddingPreviews = collect();
         $embeddingDataBytes = null;
         $embeddingPageCount = null;
-        $embeddingsAvailable = $fileEmbeddingService->isAvailable();
+        $embeddingUnavailableReason = $fileEmbeddingService->unavailableReason();
+        $embeddingsAvailable = $embeddingUnavailableReason === null;
+        $curriculumExtractionUnavailableReason = $curriculumExtractionService->unavailableReason();
 
-        if ($embeddingsAvailable
-            && $programFile->embedding_status === FileEmbeddingStatus::Complete
+        if ($programFile->embedding_status === FileEmbeddingStatus::Complete
             && Schema::hasTable('file_page_embeddings')) {
             $embeddingPreviews = $programFile->pageEmbeddings()
                 ->orderBy('page_number')
@@ -110,9 +112,13 @@ class ProgramFileController extends Controller
         return Inertia::render('admin/program-files/show', [
             'file' => $programFile->load('uploader:id,name', 'program:id,name,code')->makeHidden(['storage_key', 'storage_disk']),
             'fileEmbeddingsEnabled' => $embeddingsAvailable,
+            'embeddingUnavailableReason' => $embeddingUnavailableReason,
             'embeddingPreviews' => $embeddingPreviews,
             'embeddingDataBytes' => $embeddingDataBytes,
             'embeddingPageCount' => $embeddingPageCount,
+            'curriculumExtractionEnabled' => $curriculumExtractionUnavailableReason === null,
+            'curriculumExtractionUnavailableReason' => $curriculumExtractionUnavailableReason,
+            'latestCurriculumExtraction' => $programFile->curriculumExtractions()->latest()->first(),
         ]);
     }
 
@@ -147,6 +153,6 @@ class ProgramFileController extends Controller
         $programFile->forceFill(['upload_status' => FileUploadStatus::DeletePending])->save();
         DeleteProgramFile::dispatch($programFile->id);
 
-        return back();
+        return to_route('programs.files.index', $programFile->program_id);
     }
 }

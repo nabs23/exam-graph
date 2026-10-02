@@ -44,4 +44,9 @@ class ProgramFile extends Model
     {
         return $this->hasMany(FilePageEmbedding::class);
     }
+
+    public function curriculumExtractions(): HasMany
+    {
+        return $this->hasMany(CurriculumExtraction::class);
+    }
 }

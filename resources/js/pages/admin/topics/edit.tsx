@@ -1,8 +1,8 @@
 import type { ComponentProps } from 'react';
 import TopicForm from './_form';
-import topics from '@/routes/topics';
-import subjects from '@/routes/subjects';
-import subjectTopics from '@/routes/subjects/topics';
+import { topics } from '@/lib/curriculum-routes';
+import { subjects } from '@/lib/curriculum-routes';
+import { subjectTopics } from '@/lib/curriculum-routes';
 
 function EditTopicPage(props: ComponentProps<typeof TopicForm>) {
     return <TopicForm {...props} />;

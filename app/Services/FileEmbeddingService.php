@@ -11,11 +11,13 @@ use App\Models\ProgramFile;
 use App\Models\SubjectFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use LogicException;
 use RuntimeException;
 use Throwable;
@@ -31,12 +33,26 @@ class FileEmbeddingService
 
     public function isAvailable(): bool
     {
+        return $this->unavailableReason() === null;
+    }
+
+    public function unavailableReason(): ?string
+    {
         try {
             $this->assertReady();
 
-            return true;
-        } catch (Throwable) {
-            return false;
+            return null;
+        } catch (Throwable $exception) {
+            return match ($exception->getMessage()) {
+                'File embeddings are disabled.' => 'Embedding generation is disabled in the application configuration.',
+                'File embeddings require PostgreSQL with pgvector.' => 'PostgreSQL with pgvector is required.',
+                'File embedding migrations have not been applied.' => 'The file embedding database migration has not been applied.',
+                'The pgvector extension is not enabled for this database.' => 'The pgvector extension is not enabled for this database.',
+                'The VoyageAI API key is not configured.' => 'The VoyageAI API key is not configured.',
+                'The configured VoyageAI model does not support text embeddings.' => 'Choose a supported VoyageAI text embedding model.',
+                'The configured VoyageAI embedding dimension does not match the installed vector column.' => 'The configured embedding dimension does not match the database vector column.',
+                default => 'Embedding requirements are unavailable. Check the database, pgvector, provider, model, and dimension configuration.',
+            };
         }
     }
 
@@ -188,16 +204,48 @@ class FileEmbeddingService
             throw new LogicException('File embeddings are disabled.');
         }
 
-        try {
-            $response = Embeddings::for($texts)
-                ->dimensions($this->dimensions())
-                ->timeout((int) config('ai.file_embeddings.timeout', 40))
-                ->generate(Lab::VoyageAI, (string) config('ai.providers.voyageai.models.embeddings.default'));
-        } catch (Throwable) {
-            throw new FileEmbeddingException('provider_failed', true, 'The embedding provider request failed.');
+        $vectors = [];
+        $batchSize = max(1, min(64, (int) config('ai.file_embeddings.batch_size', 8)));
+
+        foreach (array_chunk($texts, $batchSize) as $batch) {
+            try {
+                $response = Embeddings::for($batch)
+                    ->dimensions($this->dimensions())
+                    ->timeout((int) config('ai.file_embeddings.timeout', 40))
+                    ->generate(Lab::VoyageAI, (string) config('ai.providers.voyageai.models.embeddings.default'));
+            } catch (Throwable $exception) {
+                $cause = $exception;
+
+                while ($cause->getPrevious() !== null) {
+                    $cause = $cause->getPrevious();
+                }
+
+                Log::warning('File embedding provider request failed.', [
+                    'provider' => 'voyageai',
+                    'model' => (string) config('ai.providers.voyageai.models.embeddings.default'),
+                    'exception_class' => $exception::class,
+                    'cause_class' => $cause::class,
+                    'input_count' => count($batch),
+                    'input_bytes' => array_sum(array_map('strlen', $batch)),
+                ]);
+
+                throw new FileEmbeddingException(
+                    $exception instanceof RateLimitedException ? 'provider_rate_limited' : 'provider_failed',
+                    true,
+                    $exception instanceof RateLimitedException
+                        ? 'The embedding provider rate limit was reached.'
+                        : 'The embedding provider request failed.',
+                );
+            }
+
+            if (count($response->embeddings) !== count($batch)) {
+                throw new FileEmbeddingException('invalid_embedding_response', false, 'The embedding provider returned an unexpected vector count.');
+            }
+
+            array_push($vectors, ...$response->embeddings);
         }
 
-        return $response->embeddings;
+        return $vectors;
     }
 
     private function assertReady(): void

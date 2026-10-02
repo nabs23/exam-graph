@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import LessonForm from './_form';
-import concepts from '@/routes/concepts';
-import conceptLessons from '@/routes/concepts/lessons';
+import { concepts } from '@/lib/curriculum-routes';
+import { conceptLessons } from '@/lib/curriculum-routes';
 
 function CreateLessonPage(props: ComponentProps<typeof LessonForm>) {
     return <LessonForm {...props} />;

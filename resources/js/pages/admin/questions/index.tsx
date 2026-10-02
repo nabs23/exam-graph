@@ -1,7 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
-import concepts from '@/routes/concepts';
-import conceptQuestions from '@/routes/concepts/questions';
-import questions from '@/routes/questions';
+import { concepts } from '@/lib/curriculum-routes';
+import { conceptQuestions } from '@/lib/curriculum-routes';
+import { questions } from '@/lib/curriculum-routes';
 
 type Question = { id: number; prompt: string; choices: { id: number; content: string; is_correct: boolean }[] };
 export default function Questions({ concept, questions: items }: { concept: { id: number; title: string }; questions: Question[] }) {

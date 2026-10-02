@@ -16,7 +16,7 @@ class SubjectRequest extends FormRequest
         return [
             'program_id' => ['required', 'exists:programs,id'],
             'name' => ['required', 'string', 'max:255'],
-            'code' => ['required', 'string', 'max:50'],
+            'code' => ['nullable', 'string', 'max:50'],
             'description' => ['nullable', 'string'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ];

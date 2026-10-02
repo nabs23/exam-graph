@@ -21,11 +21,11 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import concepts from '@/routes/concepts';
+import { concepts } from '@/lib/curriculum-routes';
 import programs from '@/routes/programs';
 import progress from '@/routes/progress';
 import study from '@/routes/study';
-import subjects from '@/routes/subjects';
+import { subjects } from '@/lib/curriculum-routes';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [

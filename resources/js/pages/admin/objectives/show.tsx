@@ -1,7 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
-import objectives from '@/routes/objectives';
-import concepts from '@/routes/concepts';
-import conceptObjectives from '@/routes/concepts/objectives';
+import { objectives } from '@/lib/curriculum-routes';
+import { concepts } from '@/lib/curriculum-routes';
+import { conceptObjectives } from '@/lib/curriculum-routes';
 export default function Objective({ objective }: { objective: { id: number; description: string; concept: { id: number; title: string } } }) { return <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8"><Head title="Learning objective" /><div className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-medium uppercase tracking-wide text-primary">{objective.concept.title}</p><h1 className="text-3xl font-semibold tracking-tight">Learning objective</h1></div><Link href={objectives.edit(objective)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Edit objective</Link></div><article className="rounded-xl border bg-card p-6 text-base leading-7 shadow-sm">{objective.description}</article></main>; }
 
 Objective.layout = (props: { objective: { id: number; concept: { id: number } } }) => ({ breadcrumbs: [{ title: 'Concept', href: concepts.show(props.objective.concept) }, { title: 'Learning objectives', href: conceptObjectives.index(props.objective.concept) }, { title: 'Learning objective', href: objectives.show(props.objective) }] });

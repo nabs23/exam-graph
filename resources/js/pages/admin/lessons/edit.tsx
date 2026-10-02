@@ -1,8 +1,8 @@
 import type { ComponentProps } from 'react';
 import LessonForm from './_form';
-import lessons from '@/routes/lessons';
-import concepts from '@/routes/concepts';
-import conceptLessons from '@/routes/concepts/lessons';
+import { lessons } from '@/lib/curriculum-routes';
+import { concepts } from '@/lib/curriculum-routes';
+import { conceptLessons } from '@/lib/curriculum-routes';
 
 function EditLessonPage(props: ComponentProps<typeof LessonForm>) {
     return <LessonForm {...props} />;

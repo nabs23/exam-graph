@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import SubjectForm from './_form';
-import subjects from '@/routes/subjects';
+import { subjects } from '@/lib/curriculum-routes';
 
 function EditSubjectPage(props: ComponentProps<typeof SubjectForm>) {
     return <SubjectForm {...props} />;

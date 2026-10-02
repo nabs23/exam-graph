@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import ConceptForm from './_form';
-import concepts from '@/routes/concepts';
+import { concepts } from '@/lib/curriculum-routes';
 
 function EditConceptPage(props: ComponentProps<typeof ConceptForm>) {
     return <ConceptForm {...props} />;

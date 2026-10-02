@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes AI features that come after the foundational file-embedding work in 12-A through 12-C. Nothing in this roadmap is part of the basic embedding MVP. Each feature needs a separate implementation decision, evaluation, and rollout gate.
+This document describes AI features beyond the foundational file-embedding work in 12-A through 12-C. Official program curriculum proposals are implemented separately in [12-D](12-d-curriculum-extraction-subjects-concepts.md); subject-concept RAG and later features still need their own implementation decision, evaluation, and rollout gate.
 
 ## Priority 1 — RAG for subject concept creation
 
@@ -63,11 +63,10 @@ Program-wide official syllabus extraction, automatic concept publication, graph/
 
 Consider these only after subject concept RAG is reviewed and stable:
 
-1. Official program/syllabus extraction with page-cited reviewer approval.
-2. Concept mapping and reviewer-controlled prerequisite edges.
-3. Grounded lesson drafts from approved concepts and source evidence.
-4. Low-stakes practice question drafts with reviewer approval.
-5. Learner-facing tutor responses after privacy, retention, and evidence quality gates.
+1. Concept mapping and reviewer-controlled prerequisite edges.
+2. Grounded lesson drafts from approved concepts and source evidence.
+3. Low-stakes practice question drafts with reviewer approval.
+4. Learner-facing tutor responses after privacy, retention, and evidence quality gates.
 
 ## Entry gate
 

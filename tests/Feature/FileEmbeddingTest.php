@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\FileEmbeddingException;
 use App\FileEmbeddingStatus;
 use App\Jobs\EmbedSourceFile;
 use App\Models\FilePageEmbedding;
@@ -10,6 +11,7 @@ use App\Models\SubjectFile;
 use App\Models\User;
 use App\Services\FileEmbeddingService;
 use App\Services\PdfTextExtractor;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Embeddings;
@@ -147,6 +149,24 @@ test('PDF text extraction preserves page numbers and excludes empty pages', func
 
     Process::assertRan(fn ($process): bool => in_array('pdfinfo', $process->command, true));
     Process::assertRan(fn ($process): bool => in_array('pdftotext', $process->command, true));
+});
+
+test('provider failures log diagnostic metadata without source text or provider payloads', function () {
+    config(['ai.file_embeddings.enabled' => true]);
+    Embeddings::fake(function (): never {
+        throw new RuntimeException('Private provider payload and credentials');
+    });
+    Log::shouldReceive('warning')->once()->with('File embedding provider request failed.', [
+        'provider' => 'voyageai',
+        'model' => 'voyage-4',
+        'exception_class' => RuntimeException::class,
+        'cause_class' => RuntimeException::class,
+        'input_count' => 1,
+        'input_bytes' => 12,
+    ]);
+
+    expect(fn () => app(FileEmbeddingService::class)->generate(['Private text']))
+        ->toThrow(FileEmbeddingException::class, 'The embedding provider request failed.');
 });
 
 test('deleting a source file deletes its page embeddings', function () {

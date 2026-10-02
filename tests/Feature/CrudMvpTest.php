@@ -8,6 +8,7 @@ use App\Models\QuizAttempt;
 use App\Models\Subject;
 use App\Models\SyllabusTopic;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia;
 
 test('a public learner can submit a quiz and receive persisted progress', function () {
     $user = User::factory()->create();
@@ -57,10 +58,10 @@ test('content creation rejects a self prerequisite and invalid question choices'
     $subject = Subject::query()->create(['program_id' => $program->id, 'name' => 'FAR', 'code' => 'FAR']);
     $concept = Concept::query()->create(['subject_id' => $subject->id, 'code' => 'PPE-1', 'title' => 'Initial cost']);
 
-    $this->post(route('concepts.prerequisites.store', $concept), ['prerequisite_concept_id' => $concept->id])
+    $this->post($concept->curriculumRoute('concepts.prerequisites.store'), ['prerequisite_concept_id' => $concept->id])
         ->assertStatus(422);
 
-    $this->post(route('concepts.questions.store', $concept), [
+    $this->post($concept->curriculumRoute('concepts.questions.store'), [
         'prompt' => 'Which cost is capitalized?',
         'difficulty' => 'easy',
         'choices' => [
@@ -91,15 +92,15 @@ test('content CRUD creates lessons and objectives under a concept', function () 
     $subject = Subject::query()->create(['program_id' => $program->id, 'name' => 'FAR', 'code' => 'FAR']);
     $concept = Concept::query()->create(['subject_id' => $subject->id, 'code' => 'PPE-1', 'title' => 'Initial cost']);
 
-    $this->post(route('concepts.lessons.store', $concept), [
+    $this->post($concept->curriculumRoute('concepts.lessons.store'), [
         'title' => 'Cost lesson',
         'summary' => 'Summary',
         'content' => 'Content',
-    ])->assertRedirect(route('concepts.show', $concept));
+    ])->assertRedirect($concept->curriculumRoute('concepts.show'));
 
-    $this->post(route('concepts.objectives.store', $concept), [
+    $this->post($concept->curriculumRoute('concepts.objectives.store'), [
         'description' => 'Identify directly attributable costs.',
-    ])->assertRedirect(route('concepts.show', $concept));
+    ])->assertRedirect($concept->curriculumRoute('concepts.show'));
 
     $this->assertDatabaseHas('lessons', ['concept_id' => $concept->id, 'title' => 'Cost lesson']);
     $this->assertDatabaseHas('learning_objectives', ['concept_id' => $concept->id, 'description' => 'Identify directly attributable costs.']);
@@ -116,7 +117,7 @@ test('a quiz cannot include a question from another concept', function () {
     $question->choices()->create(['content' => 'Correct', 'is_correct' => true]);
     $question->choices()->create(['content' => 'Wrong', 'is_correct' => false]);
 
-    $this->post(route('concepts.quizzes.store', $firstConcept), [
+    $this->post($firstConcept->curriculumRoute('concepts.quizzes.store'), [
         'title' => 'Invalid quiz',
         'passing_score' => 80,
         'question_ids' => [$question->id],
@@ -143,4 +144,48 @@ test('public study and progress entry points render for the local learner', func
     $this->get(route('study.index'))->assertOk();
 
     $this->get(route('progress.index'))->assertOk();
+});
+
+test('topic routes resolve the requested topic for viewing editing updating and deleting', function () {
+    $subject = Subject::factory()->create();
+    $topic = SyllabusTopic::factory()->for($subject)->create();
+    $this->actingAs(User::factory()->admin()->create());
+
+    $this->get($topic->curriculumRoute('topics.show'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('admin/topics/show')
+            ->where('topic.id', $topic->id)
+            ->where('topic.subject.id', $subject->id));
+    $this->get($topic->curriculumRoute('topics.edit'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('admin/topics/edit')
+            ->where('topic.id', $topic->id));
+    $this->put($topic->curriculumRoute('topics.update'), ['title' => 'Updated topic', 'code' => null])
+        ->assertRedirect($subject->curriculumRoute('subjects.show'));
+    $this->assertDatabaseHas('syllabus_topics', ['id' => $topic->id, 'title' => 'Updated topic']);
+    $this->delete($topic->curriculumRoute('topics.destroy'))
+        ->assertRedirect($subject->curriculumRoute('subjects.show'));
+    $this->assertModelMissing($topic);
+    $this->get($topic->curriculumRoute('topics.show'))->assertNotFound();
+});
+
+test('the subject outline includes nested topics and concept assignments', function () {
+    $subject = Subject::factory()->create();
+    $parent = SyllabusTopic::factory()->for($subject)->create(['sort_order' => 0]);
+    $child = SyllabusTopic::factory()->for($subject)->create(['parent_id' => $parent->id, 'sort_order' => 1]);
+    $linked = Concept::factory()->for($subject)->create(['syllabus_topic_id' => $child->id, 'sort_order' => 0]);
+    $unassigned = Concept::factory()->for($subject)->create(['sort_order' => 1]);
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->get($subject->curriculumRoute('subjects.show'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('admin/subjects/show')
+            ->has('subject.syllabus_topics', 2)
+            ->where('subject.syllabus_topics.0.id', $parent->id)
+            ->where('subject.syllabus_topics.1.parent_id', $parent->id)
+            ->has('subject.concepts', 2)
+            ->where('subject.concepts.0.id', $linked->id)
+            ->where('subject.concepts.0.syllabus_topic_id', $child->id)
+            ->where('subject.concepts.1.id', $unassigned->id)
+            ->where('subject.concepts.1.syllabus_topic_id', null));
 });

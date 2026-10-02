@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\Models\HasCurriculumRoutes;
 use Database\Factories\QuestionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,8 +12,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Question extends Model
 {
+    use HasCurriculumRoutes;
+
     /** @use HasFactory<QuestionFactory> */
     use HasFactory;
+
+    protected $appends = ['route_parameters'];
+
+    protected $with = ['concept'];
 
     protected $fillable = ['concept_id', 'prompt', 'explanation', 'difficulty', 'sort_order'];
 
@@ -29,5 +36,11 @@ class Question extends Model
     public function quizzes(): BelongsToMany
     {
         return $this->belongsToMany(Quiz::class, 'quiz_questions')->withPivot('sort_order');
+    }
+
+    /** @return array<string, int> */
+    public function curriculumRouteParameters(): array
+    {
+        return $this->concept->curriculumRouteParameters() + ['question' => (int) $this->id];
     }
 }

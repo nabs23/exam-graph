@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import TopicForm from './_form';
-import subjects from '@/routes/subjects';
-import subjectTopics from '@/routes/subjects/topics';
+import { subjects } from '@/lib/curriculum-routes';
+import { subjectTopics } from '@/lib/curriculum-routes';
 
 function CreateTopicPage(props: ComponentProps<typeof TopicForm>) {
     return <TopicForm {...props} />;

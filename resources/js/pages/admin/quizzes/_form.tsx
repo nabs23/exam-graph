@@ -1,6 +1,6 @@
 import { Head, useForm } from '@inertiajs/react';
-import conceptQuizzes from '@/routes/concepts/quizzes';
-import quizzes from '@/routes/quizzes';
+import { conceptQuizzes } from '@/lib/curriculum-routes';
+import { quizzes } from '@/lib/curriculum-routes';
 import { PageHeader, PageShell } from '@/components/page-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';

@@ -14,20 +14,17 @@ class DeleteProgramFile implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct(public int $fileId)
-    {
-        $file = ProgramFile::query()->whereKey($this->fileId)->where('upload_status', 'delete_pending')->first();
-
-        if ($file !== null) {
-            app(SourceFileStorage::class)->delete($file);
-        }
-    }
+    public function __construct(public int $fileId) {}
 
     /**
      * Execute the job.
      */
     public function handle(): void
     {
-        //
+        $file = ProgramFile::query()->whereKey($this->fileId)->where('upload_status', 'delete_pending')->first();
+
+        if ($file !== null) {
+            app(SourceFileStorage::class)->delete($file);
+        }
     }
 }

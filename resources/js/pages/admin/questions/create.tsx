@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import QuestionForm from './_form';
-import concepts from '@/routes/concepts';
-import conceptQuestions from '@/routes/concepts/questions';
+import { concepts } from '@/lib/curriculum-routes';
+import { conceptQuestions } from '@/lib/curriculum-routes';
 
 function CreateQuestionPage(props: ComponentProps<typeof QuestionForm>) {
     return <QuestionForm {...props} />;

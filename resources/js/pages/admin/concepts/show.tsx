@@ -1,10 +1,10 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import lessons from '@/routes/concepts/lessons';
-import objectives from '@/routes/concepts/objectives';
-import questions from '@/routes/concepts/questions';
-import quizzes from '@/routes/concepts/quizzes';
-import concepts from '@/routes/concepts';
+import { conceptLessons as lessons } from '@/lib/curriculum-routes';
+import { conceptObjectives as objectives } from '@/lib/curriculum-routes';
+import { conceptQuestions as questions } from '@/lib/curriculum-routes';
+import { conceptQuizzes as quizzes } from '@/lib/curriculum-routes';
+import { concepts } from '@/lib/curriculum-routes';
 
 type Concept = {
     id: number;
@@ -179,7 +179,7 @@ Concept.layout = (props: { concept: Concept }) => ({
         { title: 'Concepts', href: concepts.index() },
         {
             title: 'Concept',
-            href: concepts.show(props.concept.id),
+            href: concepts.show(props.concept),
         },
     ],
 });

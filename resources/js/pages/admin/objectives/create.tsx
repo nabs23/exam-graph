@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import ObjectiveForm from './_form';
-import concepts from '@/routes/concepts';
-import conceptObjectives from '@/routes/concepts/objectives';
+import { concepts } from '@/lib/curriculum-routes';
+import { conceptObjectives } from '@/lib/curriculum-routes';
 
 function CreateObjectivePage(props: ComponentProps<typeof ObjectiveForm>) {
     return <ObjectiveForm {...props} />;

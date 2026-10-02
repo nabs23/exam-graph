@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SyllabusTopicRequest;
+use App\Models\Program;
 use App\Models\Subject;
 use App\Models\SyllabusTopic;
 use Illuminate\Http\RedirectResponse;
@@ -14,7 +15,7 @@ class SyllabusTopicController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Subject $subject): Response
+    public function index(Program $program, Subject $subject): Response
     {
         return Inertia::render('admin/topics/index', ['subject' => $subject, 'topics' => $subject->syllabusTopics()->with('children')->orderBy('sort_order')->get()]);
     }
@@ -22,62 +23,62 @@ class SyllabusTopicController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create(Subject $subject): Response
+    public function create(Program $program, Subject $subject): Response
     {
-        return Inertia::render('admin/topics/create', ['subject' => $subject, 'parents' => $subject->syllabusTopics()->orderBy('sort_order')->get(['id', 'title'])]);
+        return Inertia::render('admin/topics/create', ['subject' => $subject, 'parents' => $subject->syllabusTopics()->orderBy('sort_order')->get(['id', 'subject_id', 'title'])]);
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(SyllabusTopicRequest $request, Subject $subject): RedirectResponse
+    public function store(SyllabusTopicRequest $request, Program $program, Subject $subject): RedirectResponse
     {
         $data = $request->validated();
         $this->ensureParentBelongsToSubject($data['parent_id'] ?? null, $subject);
         $topic = $subject->syllabusTopics()->create($data);
 
-        return to_route('subjects.show', $subject)->with('success', "Created {$topic->title}.");
+        return redirect()->to($subject->curriculumRoute('subjects.show'))->with('success', "Created {$topic->title}.");
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(SyllabusTopic $syllabusTopic): Response
+    public function show(Program $program, Subject $subject, SyllabusTopic $topic): Response
     {
-        return Inertia::render('admin/topics/show', ['topic' => $syllabusTopic->load(['subject', 'parent', 'children', 'concepts'])]);
+        return Inertia::render('admin/topics/show', ['topic' => $topic->load(['subject', 'parent', 'children', 'concepts'])]);
     }
 
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(SyllabusTopic $syllabusTopic): Response
+    public function edit(Program $program, Subject $subject, SyllabusTopic $topic): Response
     {
-        return Inertia::render('admin/topics/edit', ['topic' => $syllabusTopic, 'subject' => $syllabusTopic->subject, 'parents' => $syllabusTopic->subject->syllabusTopics()->where('id', '!=', $syllabusTopic->id)->get(['id', 'title'])]);
+        return Inertia::render('admin/topics/edit', ['topic' => $topic, 'subject' => $topic->subject, 'parents' => $topic->subject->syllabusTopics()->where('id', '!=', $topic->id)->get(['id', 'subject_id', 'title'])]);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(SyllabusTopicRequest $request, SyllabusTopic $syllabusTopic): RedirectResponse
+    public function update(SyllabusTopicRequest $request, Program $program, Subject $subject, SyllabusTopic $topic): RedirectResponse
     {
         $data = $request->validated();
-        $this->ensureParentBelongsToSubject($data['parent_id'] ?? null, $syllabusTopic->subject);
-        abort_if((int) ($data['parent_id'] ?? 0) === $syllabusTopic->id, 422, 'A topic cannot be its own parent.');
-        $syllabusTopic->update($data);
+        $this->ensureParentBelongsToSubject($data['parent_id'] ?? null, $topic->subject);
+        abort_if((int) ($data['parent_id'] ?? 0) === $topic->id, 422, 'A topic cannot be its own parent.');
+        $topic->update($data);
 
-        return to_route('subjects.show', $syllabusTopic->subject);
+        return redirect()->to($topic->subject->curriculumRoute('subjects.show'));
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(SyllabusTopic $syllabusTopic): RedirectResponse
+    public function destroy(Program $program, Subject $subject, SyllabusTopic $topic): RedirectResponse
     {
-        abort_if($syllabusTopic->children()->exists() || $syllabusTopic->concepts()->exists(), 422, 'Remove child topics and concepts before deleting this topic.');
-        $subject = $syllabusTopic->subject;
-        $syllabusTopic->delete();
+        abort_if($topic->children()->exists() || $topic->concepts()->exists(), 422, 'Remove child topics and concepts before deleting this topic.');
+        $subject = $topic->subject;
+        $topic->delete();
 
-        return to_route('subjects.show', $subject);
+        return redirect()->to($subject->curriculumRoute('subjects.show'));
     }
 
     private function ensureParentBelongsToSubject(?int $parentId, Subject $subject): void
