@@ -1,5 +1,6 @@
 import rawSubjects from '@/routes/subjects';
 import rawTopics from '@/routes/topics';
+import rawSubjectTopics from '@/routes/subjects/topics';
 import rawConcepts from '@/routes/concepts';
 import rawLessons from '@/routes/lessons';
 import rawQuestions from '@/routes/questions';
@@ -56,9 +57,9 @@ export const subjects = { ...rawSubjects,
     update: contextualRoute(rawSubjects.update), destroy: contextualRoute(rawSubjects.destroy),
 };
 export const subjectTopics = {
-    index: contextualRoute(rawTopics.index), create: contextualRoute(rawTopics.create), store: contextualRoute(rawTopics.store),
+    index: contextualRoute(rawSubjectTopics.index), create: contextualRoute(rawTopics.create), store: contextualRoute(rawTopics.store),
 };
-export const topics = { ...subjectTopics,
+export const topics = { ...rawTopics,
     show: contextualRoute(rawTopics.show), edit: contextualRoute(rawTopics.edit),
     update: contextualRoute(rawTopics.update), destroy: contextualRoute(rawTopics.destroy),
 };

@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { concepts } from '@/lib/curriculum-routes';
+import { topics } from '@/lib/curriculum-routes';
 import programs from '@/routes/programs';
 import progress from '@/routes/progress';
 import study from '@/routes/study';
@@ -58,6 +59,11 @@ const mainNavItems: NavItem[] = [
         title: 'Concepts',
         href: concepts.index(),
         icon: BookOpen,
+    },
+    {
+        title: 'Topics',
+        href: topics.index(),
+        icon: ListTree,
     },
 ];
 

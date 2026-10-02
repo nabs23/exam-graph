@@ -45,7 +45,7 @@ export default function Subject({ subject }: {
                 </section>
             )}
             <Link href={subjectConcepts.create(subject)} className="inline-block text-sm font-medium text-primary hover:underline">Create a concept</Link>
-            <SourceFiles ownerId={subject.id} kind="subject" files={subject.files} />
+            <SourceFiles ownerId={subject.id} kind="subject" files={subject.files} pollingOnly={["subject"]} />
         </main>
     );
 }

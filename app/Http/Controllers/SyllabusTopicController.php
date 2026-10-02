@@ -6,6 +6,7 @@ use App\Http\Requests\SyllabusTopicRequest;
 use App\Models\Program;
 use App\Models\Subject;
 use App\Models\SyllabusTopic;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -15,9 +16,18 @@ class SyllabusTopicController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Program $program, Subject $subject): Response
+    public function index(?Program $program = null, ?Subject $subject = null): Response
     {
-        return Inertia::render('admin/topics/index', ['subject' => $subject, 'topics' => $subject->syllabusTopics()->with('children')->orderBy('sort_order')->get()]);
+        $topics = SyllabusTopic::query()
+            ->when($subject, fn (Builder $query): Builder => $query->where('subject_id', $subject->id))
+            ->with('children')
+            ->orderBy('sort_order')
+            ->get();
+
+        return Inertia::render('admin/topics/index', [
+            'subject' => $subject,
+            'topics' => $topics,
+        ]);
     }
 
     /**

@@ -53,11 +53,12 @@ Route::middleware(['auth', 'verified', 'can:manage-content'])->group(function ()
     Route::post('subject-files/{subjectFile}/download', [SubjectFileController::class, 'download'])->name('subject-files.download');
     Route::post('subject-files/{subjectFile}/embeddings', [SubjectFileController::class, 'embed'])->middleware('throttle:5,1')->name('subject-files.embeddings.store');
     Route::resource('concepts', ConceptController::class)->only(['index', 'create', 'store']);
+    Route::get('topics', [SyllabusTopicController::class, 'index'])->name('topics.index');
     Route::prefix('programs/{program}')->scopeBindings()->group(function (): void {
         Route::resource('subjects', SubjectController::class)->only(['index', 'create', 'store'])->names(['index' => 'programs.subjects.index', 'create' => 'programs.subjects.create', 'store' => 'programs.subjects.store']);
         Route::resource('subjects', SubjectController::class)->except(['index', 'create', 'store']);
         Route::prefix('subjects/{subject}')->group(function (): void {
-            Route::resource('topics', SyllabusTopicController::class);
+            Route::resource('topics', SyllabusTopicController::class)->names(['index' => 'subjects.topics.index']);
 
             $conceptRoutes = function (): void {
                 Route::resource('concepts', ConceptController::class)->except(['index', 'create', 'store']);

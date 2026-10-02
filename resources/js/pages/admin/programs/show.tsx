@@ -61,6 +61,7 @@ export default function Program({
             <SourceFiles
                 ownerId={program.id}
                 kind="program"
+                pollingOnly={["program"]}
                 files={program.files}
             />
         </main>
