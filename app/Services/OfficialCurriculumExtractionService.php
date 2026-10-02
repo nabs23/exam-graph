@@ -180,6 +180,7 @@ class OfficialCurriculumExtractionService
 
         DB::transaction(function () use ($extraction, $selections, $reviewer, &$sourceChanged): void {
             $locked = CurriculumExtraction::query()->with('program')->lockForUpdate()->findOrFail($extraction->id);
+            $program = Program::query()->lockForUpdate()->findOrFail($locked->program_id);
 
             if ($locked->status !== CurriculumExtractionStatus::Reviewing || ! is_array($locked->proposal)) {
                 throw ValidationException::withMessages(['extraction' => 'Only a proposal awaiting review can be published.']);
@@ -263,28 +264,37 @@ class OfficialCurriculumExtractionService
                 throw ValidationException::withMessages(['subjects' => 'Select at least one subject to publish.']);
             }
 
-            $this->assertUniqueCodes($selected, $locked->program->id);
+            $this->assertUniqueCodes($selected);
 
-            foreach ($selected as $subjectOrder => $subjectData) {
-                $subject = Subject::query()->create([
-                    'program_id' => $locked->program->id,
-                    'name' => $subjectData['name'],
-                    'code' => $subjectData['code'],
-                    'description' => $subjectData['description'],
-                    'sort_order' => ((int) Subject::query()->where('program_id', $locked->program->id)->max('sort_order')) + 1,
-                ]);
+            foreach ($selected as $subjectData) {
+                $subject = Subject::query()->firstOrCreate(
+                    $subjectData['code'] === null
+                        ? ['program_id' => $program->id, 'name' => $subjectData['name']]
+                        : ['program_id' => $program->id, 'code' => $subjectData['code']],
+                    [
+                        'name' => $subjectData['name'],
+                        'code' => $subjectData['code'],
+                        'description' => $subjectData['description'],
+                        'sort_order' => ((int) Subject::query()->where('program_id', $program->id)->max('sort_order')) + 1,
+                    ],
+                );
 
-                $createdTopics = [];
+                $resolvedTopics = [];
                 foreach ($subjectData['topics'] as $topicOrder => $topicData) {
-                    $parent = $topicData['parent_index'] === null ? null : ($createdTopics[$topicData['parent_index']] ?? null);
-                    $topic = $subject->syllabusTopics()->create([
-                        'parent_id' => $parent?->id,
-                        'code' => $topicData['code'],
-                        'title' => $topicData['title'],
-                        'description' => $topicData['description'],
-                        'sort_order' => $topicOrder,
-                    ]);
-                    $createdTopics[$topicOrder] = $topic;
+                    $parent = $topicData['parent_index'] === null ? null : ($resolvedTopics[$topicData['parent_index']] ?? null);
+                    $topic = $subject->syllabusTopics()->firstOrCreate(
+                        $topicData['code'] === null
+                            ? ['parent_id' => $parent?->id, 'title' => $topicData['title']]
+                            : ['code' => $topicData['code']],
+                        [
+                            'parent_id' => $parent?->id,
+                            'code' => $topicData['code'],
+                            'title' => $topicData['title'],
+                            'description' => $topicData['description'],
+                            'sort_order' => $topicOrder,
+                        ],
+                    );
+                    $resolvedTopics[$topicOrder] = $topic;
                 }
             }
 
@@ -483,14 +493,14 @@ class OfficialCurriculumExtractionService
     }
 
     /** @param array<int, array<string, mixed>> $selected */
-    private function assertUniqueCodes(array $selected, int $programId): void
+    private function assertUniqueCodes(array $selected): void
     {
         $subjectCodes = [];
         foreach ($selected as $subject) {
             $code = $subject['code'];
             if ($code !== null) {
                 $normalizedCode = mb_strtolower($code);
-                if (in_array($normalizedCode, $subjectCodes, true) || Subject::query()->where('program_id', $programId)->whereRaw('lower(code) = ?', [$normalizedCode])->exists()) {
+                if (in_array($normalizedCode, $subjectCodes, true)) {
                     throw ValidationException::withMessages(['subjects' => 'Subject codes must be unique within the program.']);
                 }
                 $subjectCodes[] = $normalizedCode;

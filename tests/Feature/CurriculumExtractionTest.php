@@ -106,6 +106,41 @@ test('a reviewer can publish subjects and topics without official codes', functi
         ->and($extraction->fresh()->status)->toBe(CurriculumExtractionStatus::Published);
 });
 
+test('publishing reuses existing subjects and topics before adding missing topics', function () {
+    $program = Program::factory()->create();
+    $file = ProgramFile::factory()->for($program)->create([
+        'content_hash' => str_repeat('d', 64),
+        'embedding_status' => FileEmbeddingStatus::Complete,
+    ]);
+    $subject = Subject::factory()->for($program)->create(['code' => 'BIO-1', 'name' => 'Biology']);
+    $existingTopic = SyllabusTopic::factory()->for($subject)->create(['code' => 'BIO-1.1', 'title' => 'Cells']);
+    $extraction = CurriculumExtraction::factory()->for($program)->for($file)->create([
+        'source_hash' => $file->content_hash,
+        'source_files' => curriculumSourceSnapshot($file),
+        'proposal' => curriculumReviewData([
+            ['code' => 'BIO-1.1', 'title' => 'Cells', 'description' => null, 'source_page' => 2, 'parent_index' => null],
+            ['code' => 'BIO-1.1.1', 'title' => 'Cell structure', 'description' => null, 'source_page' => 3, 'parent_index' => 0],
+        ], $file->id),
+    ]);
+
+    app(OfficialCurriculumExtractionService::class)->publish($extraction, [[
+        'include' => '1',
+        'name' => 'Biology',
+        'code' => 'BIO-1',
+        'topics' => [
+            ['include' => '1', 'code' => 'BIO-1.1', 'title' => 'Cells'],
+            ['include' => '1', 'code' => 'BIO-1.1.1', 'title' => 'Cell structure'],
+        ],
+    ]], User::factory()->admin()->create());
+
+    $childTopic = SyllabusTopic::query()->where('subject_id', $subject->id)->where('code', 'BIO-1.1.1')->firstOrFail();
+
+    $this->assertDatabaseCount('subjects', 1);
+    $this->assertDatabaseCount('syllabus_topics', 2);
+    expect($childTopic->parent_id)->toBe($existingTopic->id)
+        ->and($extraction->fresh()->status)->toBe(CurriculumExtractionStatus::Published);
+});
+
 test('publishing a child topic without its selected parent is rejected atomically', function () {
     $program = Program::factory()->create();
     $file = ProgramFile::factory()->for($program)->create([
