@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ProgramRequest;
 use App\Models\Program;
+use App\Services\OfficialCurriculumExtractionService;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -39,9 +40,17 @@ class ProgramController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Program $program): Response
+    public function show(Program $program, OfficialCurriculumExtractionService $curriculumExtractionService): Response
     {
-        return Inertia::render('admin/programs/show', ['program' => $program->load(['subjects' => fn ($query) => $query->orderBy('sort_order'), 'files.uploader:id,name'])]);
+        $program->load(['subjects' => fn ($query) => $query->orderBy('sort_order'), 'files.uploader:id,name']);
+        $unavailableReason = $curriculumExtractionService->unavailableReason();
+
+        return Inertia::render('admin/programs/show', [
+            'program' => $program,
+            'curriculumExtractionEnabled' => $unavailableReason === null,
+            'curriculumExtractionUnavailableReason' => $unavailableReason,
+            'latestCurriculumExtraction' => $program->curriculumExtractions()->latest()->first(['id', 'program_id', 'status']),
+        ]);
     }
 
     /**

@@ -1,6 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { embed as embedProgramFile } from '@/actions/App/Http/Controllers/ProgramFileController';
-import { show as curriculumExtractionShow, store as storeCurriculumExtraction } from '@/actions/App/Http/Controllers/CurriculumExtractionController';
 import { Button } from '@/components/ui/button';
 import { SourceFile, SourceFileDeleteButton } from '@/components/source-files';
 import { useFileEmbeddingPolling } from '@/components/source-files';
@@ -15,9 +14,6 @@ export default function ProgramFileShow({
     embeddingPreviews,
     embeddingDataBytes,
     embeddingPageCount,
-    curriculumExtractionEnabled,
-    curriculumExtractionUnavailableReason,
-    latestCurriculumExtraction,
 }: {
     file: SourceFile & { program: { id: number; name: string; code: string } };
     fileEmbeddingsEnabled: boolean;
@@ -25,9 +21,6 @@ export default function ProgramFileShow({
     embeddingPreviews: { page_number: number; model: string; dimensions: number; excerpt: string; values: number[] }[];
     embeddingDataBytes: number | null;
     embeddingPageCount: number | null;
-    curriculumExtractionEnabled: boolean;
-    curriculumExtractionUnavailableReason: string | null;
-    latestCurriculumExtraction: { id: number; status: string; error_code: string | null } | null;
 }) {
     const embeddingInProgress = ['queued', 'processing'].includes(file.embedding_status);
     const embeddingDisabledReason = getEmbeddingDisabledReason(
@@ -37,12 +30,6 @@ export default function ProgramFileShow({
         embeddingUnavailableReason,
     );
     const canRequestEmbedding = embeddingDisabledReason === null;
-    const curriculumExtractionDisabledReason = getCurriculumExtractionDisabledReason(
-        file,
-        curriculumExtractionEnabled,
-        curriculumExtractionUnavailableReason,
-        latestCurriculumExtraction,
-    );
 
     useFileEmbeddingPolling(
         embeddingInProgress,
@@ -190,77 +177,8 @@ export default function ProgramFileShow({
                 </Form>
             </section>
 
-            <section className="space-y-4 rounded-xl border bg-card p-5 shadow-sm">
-                <div>
-                    <h2 className="font-semibold">Official curriculum extraction</h2>
-                    <p className="text-sm text-muted-foreground">
-                        Prepare a reviewer proposal of official subjects and syllabus topics from this PDF’s extracted page text. Nothing is added to the curriculum until a reviewer publishes selected items.
-                    </p>
-                </div>
-                {latestCurriculumExtraction && (
-                    <div className="text-sm" aria-live="polite">
-                        Latest proposal: <Link className="underline" href={curriculumExtractionShow(latestCurriculumExtraction.id)}>
-                            {latestCurriculumExtraction.status.replaceAll('_', ' ')}
-                        </Link>
-                        {latestCurriculumExtraction.error_code && <span className="text-muted-foreground"> · {latestCurriculumExtraction.error_code.replaceAll('_', ' ')}</span>}
-                    </div>
-                )}
-                <Form {...storeCurriculumExtraction.form(file.id)}>
-                    {({ processing }) => (
-                        <div className="space-y-2">
-                            <input type="hidden" name="confirmation" value="1" />
-                            <Button
-                                type="submit"
-                                variant="outline"
-                                disabled={processing || curriculumExtractionDisabledReason !== null}
-                                aria-describedby={curriculumExtractionDisabledReason ? 'curriculum-extraction-initiation-reason' : undefined}
-                            >
-                                {processing ? 'Queueing…' : 'Extract official curriculum'}
-                            </Button>
-                            {curriculumExtractionDisabledReason && (
-                                <p id="curriculum-extraction-initiation-reason" className="text-sm text-muted-foreground" aria-live="polite">
-                                    {curriculumExtractionDisabledReason}
-                                </p>
-                            )}
-                        </div>
-                    )}
-                </Form>
-            </section>
         </main>
     );
-}
-
-function getCurriculumExtractionDisabledReason(
-    file: SourceFile,
-    extractionAvailable: boolean,
-    availabilityReason: string | null,
-    latestExtraction: { status: string } | null,
-): string | null {
-    if (file.upload_status !== 'uploaded') {
-        return 'The file upload must complete before curriculum extraction can start.';
-    }
-
-    if (file.mime_type !== 'application/pdf') {
-        return 'Official curriculum extraction is available for program PDFs only.';
-    }
-
-    if (file.embedding_status !== 'complete') {
-        return 'Generate complete text embeddings for this PDF before extracting curriculum.';
-    }
-
-    if (!extractionAvailable) {
-        return availabilityReason ?? 'Curriculum extraction requirements are unavailable.';
-    }
-
-    if (latestExtraction?.status === 'queued' || latestExtraction?.status === 'processing') {
-        return 'Curriculum extraction is already queued or processing.';
-    }
-
-    if (latestExtraction?.status === 'reviewing') {
-        return 'Review or reject the current proposal before starting another extraction.';
-    }
-
-    return null;
 }
 
 function formatBytes(bytes: number): string {

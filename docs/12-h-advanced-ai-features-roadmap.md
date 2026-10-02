@@ -57,7 +57,7 @@ Do not ask the model to invent concept IDs, official syllabus codes, prerequisit
 
 ### Explicitly out of scope for the first RAG iteration
 
-Program-wide official syllabus extraction, automatic concept publication, graph/prerequisite generation, lesson generation, learner tutoring, practice-question generation, hybrid search, reranking, agent tools, and autonomous multi-step agents.
+Automatic concept publication, graph/prerequisite generation, lesson generation, learner tutoring, practice-question generation, hybrid search, reranking, agent tools, and autonomous multi-step agents. Program-wide official syllabus extraction is delivered separately in [12-D](12-d-curriculum-extraction-subjects-concepts.md).
 
 ## Later advanced features
 

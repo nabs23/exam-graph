@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\CurriculumExtractionStatus;
-use App\FileEmbeddingStatus;
 use App\Http\Requests\PublishCurriculumExtractionRequest;
 use App\Http\Requests\StoreCurriculumExtractionRequest;
 use App\Models\CurriculumExtraction;
-use App\Models\ProgramFile;
+use App\Models\FilePageEmbedding;
+use App\Models\Program;
 use App\Services\OfficialCurriculumExtractionService;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -17,28 +17,31 @@ class CurriculumExtractionController extends Controller
 {
     public function store(
         StoreCurriculumExtractionRequest $request,
-        ProgramFile $programFile,
+        Program $program,
         OfficialCurriculumExtractionService $service,
     ): RedirectResponse {
         abort_unless($service->isAvailable(), 404);
-        abort_unless($programFile->embedding_status === FileEmbeddingStatus::Complete, 409);
-
-        $extraction = $service->queue($programFile, $request->user());
+        $extraction = $service->queue($program, $request->user());
 
         return to_route('curriculum-extractions.show', $extraction);
     }
 
     public function show(CurriculumExtraction $curriculumExtraction, OfficialCurriculumExtractionService $service): Response
     {
-        $curriculumExtraction->load('programFile.program:id,name,code', 'requester:id,name', 'reviewer:id,name');
+        $curriculumExtraction->load('program:id,name,code', 'requester:id,name', 'reviewer:id,name');
         $pages = collect();
 
         if (in_array($curriculumExtraction->status, [CurriculumExtractionStatus::Reviewing, CurriculumExtractionStatus::Published], true)) {
-            $pages = $curriculumExtraction->programFile->pageEmbeddings()
-                ->where('source_hash', $curriculumExtraction->source_hash)
+            $sourceHashes = collect($curriculumExtraction->source_files)->pluck('content_hash', 'id');
+            $pages = FilePageEmbedding::query()
+                ->whereIn('program_file_id', $sourceHashes->keys())
+                ->whereNotNull('content')
+                ->orderBy('program_file_id')
                 ->orderBy('page_number')
-                ->get(['page_number', 'content'])
+                ->get(['program_file_id', 'page_number', 'source_hash', 'content'])
+                ->filter(fn (FilePageEmbedding $page): bool => $page->source_hash === $sourceHashes[$page->program_file_id])
                 ->map(fn ($page): array => [
+                    'source_file_id' => $page->program_file_id,
                     'page_number' => $page->page_number,
                     'text' => str($page->content)->squish()->limit(1200)->toString(),
                 ]);

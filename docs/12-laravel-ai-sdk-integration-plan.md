@@ -14,7 +14,7 @@ The existing application currently defaults to SQLite. PostgreSQL with pgvector 
 | 2 | [B — Program and subject file embedding inputs](12-b-source-documents-content-mapping.md) | Reuse existing private file records; define supported input and page provenance. |
 | 3 | [C — VoyageAI text embeddings in PostgreSQL](12-c-voyageai-pgvector-embeddings.md) | Extract PDF page text, generate vectors, and store them with pgvector. |
 | 4 | [G — Embedding MVP governance and rollout](12-g-ai-governance-evaluation-rollout.md) | Evaluate, secure, and pilot this single workflow. |
-| 5 | [D — Official curriculum extraction](12-d-curriculum-extraction-subjects-concepts.md) | Propose page-cited official subjects and syllabus topics from completed program-file text embeddings; publish only after reviewer action. |
+| 5 | [D — Official curriculum extraction](12-d-curriculum-extraction-subjects-concepts.md) | Propose file/page-cited official subjects and recursive syllabus topics from a snapshot of completed program-file text embeddings; publish only after reviewer action. |
 
 ## Later feature notes
 

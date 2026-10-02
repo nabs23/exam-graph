@@ -1,10 +1,15 @@
-import { Head, Link } from "@inertiajs/react";
+import { Form, Head, Link } from "@inertiajs/react";
+import { show as curriculumExtractionShow, store as storeCurriculumExtraction } from '@/actions/App/Http/Controllers/CurriculumExtractionController';
+import { Button } from '@/components/ui/button';
 import { SourceFiles } from "@/components/source-files";
 import programs from "@/routes/programs";
 import { programSubjects, subjects } from '@/lib/curriculum-routes';
 
 export default function Program({
     program,
+    curriculumExtractionEnabled,
+    curriculumExtractionUnavailableReason,
+    latestCurriculumExtraction,
 }: {
     program: {
         id: number;
@@ -14,6 +19,9 @@ export default function Program({
         subjects: { id: number; name: string; code: string | null }[];
         files: import("@/components/source-files").SourceFile[];
     };
+    curriculumExtractionEnabled: boolean;
+    curriculumExtractionUnavailableReason: string | null;
+    latestCurriculumExtraction: { id: number; status: string } | null;
 }) {
     return (
         <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -37,6 +45,19 @@ export default function Program({
                     Edit program
                 </Link>
             </div>
+            <section className="space-y-3 rounded-xl border bg-card p-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-xl font-semibold">Official curriculum</h2>
+                        <p className="text-sm text-muted-foreground">Build one reviewer-controlled proposal from all completed program PDFs.</p>
+                    </div>
+                    <Form {...storeCurriculumExtraction.form(program)}>
+                        {({ processing }) => <><input type="hidden" name="confirmation" value="1" /><Button type="submit" disabled={processing || !curriculumExtractionEnabled}>{processing ? 'Starting…' : 'Extract curriculum'}</Button></>}
+                    </Form>
+                </div>
+                {latestCurriculumExtraction && <p className="text-sm text-muted-foreground">Latest proposal: <Link className="underline" href={curriculumExtractionShow(latestCurriculumExtraction.id)}>{latestCurriculumExtraction.status.replaceAll('_', ' ')}</Link></p>}
+                {curriculumExtractionUnavailableReason && <p className="text-sm text-muted-foreground">{curriculumExtractionUnavailableReason}</p>}
+            </section>
             <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Subjects</h2>
                 <Link

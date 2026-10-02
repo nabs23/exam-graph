@@ -92,8 +92,6 @@ test('content managers can inspect files only without receiving storage internal
             ->where('file.id', $file->id)
             ->where('fileEmbeddingsEnabled', false)
             ->where('embeddingUnavailableReason', 'PostgreSQL with pgvector is required.')
-            ->where('curriculumExtractionEnabled', false)
-            ->where('curriculumExtractionUnavailableReason', 'PostgreSQL and the curriculum extraction migrations are required.')
             ->missing('file.storage_key')
             ->missing('file.storage_disk'));
 });

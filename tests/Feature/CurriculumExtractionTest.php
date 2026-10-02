@@ -12,17 +12,23 @@ use App\Services\OfficialCurriculumExtractionService;
 use Illuminate\Validation\ValidationException;
 use Mockery\MockInterface;
 
-function curriculumReviewData(array $topics = []): array
+function curriculumReviewData(array $topics = [], int $sourceFileId = 1): array
 {
     return [
         'subjects' => [[
             'code' => 'BIO-1',
             'name' => 'Biology',
             'description' => 'The study of living systems.',
+            'source_file_id' => $sourceFileId,
             'source_page' => 2,
-            'topics' => $topics,
+            'topics' => array_map(fn (array $topic): array => ['source_file_id' => $sourceFileId, ...$topic], $topics),
         ]],
     ];
+}
+
+function curriculumSourceSnapshot(ProgramFile $file): array
+{
+    return [['id' => $file->id, 'content_hash' => $file->content_hash, 'title' => $file->title]];
 }
 
 test('a reviewer can publish selected official subjects and their topic hierarchy', function () {
@@ -32,12 +38,13 @@ test('a reviewer can publish selected official subjects and their topic hierarch
         'embedding_status' => FileEmbeddingStatus::Complete,
     ]);
     $reviewer = User::factory()->admin()->create();
-    $extraction = CurriculumExtraction::factory()->for($file)->create([
+    $extraction = CurriculumExtraction::factory()->for($program)->for($file)->create([
         'source_hash' => $file->content_hash,
+        'source_files' => curriculumSourceSnapshot($file),
         'proposal' => curriculumReviewData([
             ['code' => 'BIO-1.1', 'title' => 'Cells', 'description' => null, 'source_page' => 2, 'parent_index' => null],
             ['code' => 'BIO-1.1.1', 'title' => 'Cell structure', 'description' => null, 'source_page' => 3, 'parent_index' => 0],
-        ]),
+        ], $file->id),
     ]);
 
     app(OfficialCurriculumExtractionService::class)->publish($extraction, [[
@@ -70,11 +77,12 @@ test('a reviewer can publish subjects and topics without official codes', functi
         'embedding_status' => FileEmbeddingStatus::Complete,
     ]);
     $reviewer = User::factory()->admin()->create();
-    $extraction = CurriculumExtraction::factory()->for($file)->create([
+    $extraction = CurriculumExtraction::factory()->for($program)->for($file)->create([
         'source_hash' => $file->content_hash,
+        'source_files' => curriculumSourceSnapshot($file),
         'proposal' => curriculumReviewData([
             ['code' => null, 'title' => 'Living systems', 'description' => 'Describes the variety of organisms and how they interact.', 'description_origin' => 'ai_generated', 'source_page' => 2, 'parent_index' => null],
-        ]),
+        ], $file->id),
     ]);
 
     app(OfficialCurriculumExtractionService::class)->publish($extraction, [[
@@ -105,12 +113,13 @@ test('publishing a child topic without its selected parent is rejected atomicall
         'embedding_status' => FileEmbeddingStatus::Complete,
     ]);
     $reviewer = User::factory()->admin()->create();
-    $extraction = CurriculumExtraction::factory()->for($file)->create([
+    $extraction = CurriculumExtraction::factory()->for($program)->for($file)->create([
         'source_hash' => $file->content_hash,
+        'source_files' => curriculumSourceSnapshot($file),
         'proposal' => curriculumReviewData([
             ['code' => 'BIO-1.1', 'title' => 'Cells', 'description' => null, 'source_page' => 2, 'parent_index' => null],
             ['code' => 'BIO-1.1.1', 'title' => 'Cell structure', 'description' => null, 'source_page' => 3, 'parent_index' => 0],
-        ]),
+        ], $file->id),
     ]);
 
     expect(fn () => app(OfficialCurriculumExtractionService::class)->publish($extraction, [[
@@ -128,6 +137,38 @@ test('publishing a child topic without its selected parent is rejected atomicall
     expect($extraction->fresh()->status)->toBe(CurriculumExtractionStatus::Reviewing);
 });
 
+test('publishing fails when any file in the program source snapshot changes', function () {
+    $program = Program::factory()->create();
+    $firstFile = ProgramFile::factory()->for($program)->create([
+        'content_hash' => str_repeat('a', 64),
+        'embedding_status' => FileEmbeddingStatus::Complete,
+    ]);
+    $secondFile = ProgramFile::factory()->for($program)->create([
+        'content_hash' => str_repeat('b', 64),
+        'embedding_status' => FileEmbeddingStatus::Complete,
+    ]);
+    $extraction = CurriculumExtraction::factory()->for($program)->create([
+        'source_files' => [
+            ...curriculumSourceSnapshot($firstFile),
+            ...curriculumSourceSnapshot($secondFile),
+        ],
+        'proposal' => curriculumReviewData([], $firstFile->id),
+    ]);
+
+    $secondFile->forceFill(['content_hash' => str_repeat('c', 64)])->save();
+
+    expect(fn () => app(OfficialCurriculumExtractionService::class)->publish($extraction, [[
+        'include' => '1',
+        'name' => 'Biology',
+        'code' => 'BIO-1',
+        'description' => 'The study of living systems.',
+        'topics' => [],
+    ]], User::factory()->admin()->create()))->toThrow(ValidationException::class);
+
+    expect($extraction->fresh()->status)->toBe(CurriculumExtractionStatus::Failed);
+    $this->assertDatabaseCount('subjects', 0);
+});
+
 test('rejecting a proposal records the reviewer without creating curriculum records', function () {
     $extraction = CurriculumExtraction::factory()->create();
     $reviewer = User::factory()->admin()->create();
@@ -140,23 +181,24 @@ test('rejecting a proposal records the reviewer without creating curriculum reco
     $this->assertDatabaseCount('syllabus_topics', 0);
 });
 
-test('an administrator can queue extraction from a file with completed embeddings', function () {
-    $file = ProgramFile::factory()->create(['embedding_status' => FileEmbeddingStatus::Complete]);
+test('an administrator can queue extraction from a program with completed embeddings', function () {
+    $program = Program::factory()->create();
+    ProgramFile::factory()->for($program)->create(['embedding_status' => FileEmbeddingStatus::Complete]);
     $administrator = User::factory()->admin()->create();
-    $extraction = CurriculumExtraction::factory()->for($file)->create();
+    $extraction = CurriculumExtraction::factory()->for($program)->create();
 
-    $this->mock(OfficialCurriculumExtractionService::class, function (MockInterface $service) use ($administrator, $file, $extraction): void {
+    $this->mock(OfficialCurriculumExtractionService::class, function (MockInterface $service) use ($administrator, $program, $extraction): void {
         $service->shouldReceive('isAvailable')->once()->andReturnTrue();
-        $service->shouldReceive('queue')->once()->withArgs(fn (ProgramFile $queuedFile, User $requester): bool => $queuedFile->is($file) && $requester->is($administrator))->andReturn($extraction);
+        $service->shouldReceive('queue')->once()->withArgs(fn (Program $queuedProgram, User $requester): bool => $queuedProgram->is($program) && $requester->is($administrator))->andReturn($extraction);
     });
 
     $this->actingAs($administrator)
-        ->post(route('program-files.curriculum-extractions.store', $file), ['confirmation' => '1'])
+        ->post(route('programs.curriculum-extractions.store', $program), ['confirmation' => '1'])
         ->assertRedirect(route('curriculum-extractions.show', $extraction));
 });
 
 test('curriculum extraction is hidden when the feature is unavailable', function () {
-    $file = ProgramFile::factory()->create(['embedding_status' => FileEmbeddingStatus::Complete]);
+    $program = Program::factory()->create();
 
     $this->mock(OfficialCurriculumExtractionService::class, function (MockInterface $service): void {
         $service->shouldReceive('isAvailable')->once()->andReturnFalse();
@@ -164,6 +206,6 @@ test('curriculum extraction is hidden when the feature is unavailable', function
     });
 
     $this->actingAs(User::factory()->admin()->create())
-        ->post(route('program-files.curriculum-extractions.store', $file), ['confirmation' => '1'])
+        ->post(route('programs.curriculum-extractions.store', $program), ['confirmation' => '1'])
         ->assertNotFound();
 });

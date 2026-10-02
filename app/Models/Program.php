@@ -23,4 +23,9 @@ class Program extends Model
     {
         return $this->hasMany(ProgramFile::class);
     }
+
+    public function curriculumExtractions(): HasMany
+    {
+        return $this->hasMany(CurriculumExtraction::class);
+    }
 }

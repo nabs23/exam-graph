@@ -14,7 +14,7 @@ class CurriculumExtraction extends Model
     use HasFactory;
 
     protected $fillable = [
-        'program_file_id', 'requested_by', 'reviewed_by', 'status', 'source_hash',
+        'program_id', 'program_file_id', 'requested_by', 'reviewed_by', 'status', 'source_hash', 'source_files',
         'provider', 'model', 'prompt_version', 'proposal', 'reviewed_proposal', 'error_code', 'reviewed_at',
     ];
 
@@ -24,6 +24,7 @@ class CurriculumExtraction extends Model
             'status' => CurriculumExtractionStatus::class,
             'proposal' => 'array',
             'reviewed_proposal' => 'array',
+            'source_files' => 'array',
             'reviewed_at' => 'datetime',
         ];
     }
@@ -31,6 +32,11 @@ class CurriculumExtraction extends Model
     public function programFile(): BelongsTo
     {
         return $this->belongsTo(ProgramFile::class);
+    }
+
+    public function program(): BelongsTo
+    {
+        return $this->belongsTo(Program::class);
     }
 
     public function requester(): BelongsTo

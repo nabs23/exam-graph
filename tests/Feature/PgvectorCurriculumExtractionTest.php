@@ -5,6 +5,7 @@ use App\CurriculumExtractionStatus;
 use App\FileEmbeddingStatus;
 use App\Models\CurriculumExtraction;
 use App\Models\FilePageEmbedding;
+use App\Models\Program;
 use App\Models\ProgramFile;
 use App\Models\User;
 use App\Services\OfficialCurriculumExtractionService;
@@ -26,7 +27,8 @@ beforeEach(function (): void {
 
 test('extraction saves only validated structured output with source page provenance', function () {
     $hash = str_repeat('c', 64);
-    $file = ProgramFile::factory()->create([
+    $program = Program::factory()->create();
+    $file = ProgramFile::factory()->for($program)->create([
         'content_hash' => $hash,
         'embedding_status' => FileEmbeddingStatus::Complete,
     ]);
@@ -42,10 +44,11 @@ test('extraction saves only validated structured output with source page provena
         'embedding' => array_fill(0, 1024, 0.0),
         'embedded_at' => now(),
     ]);
-    $extraction = CurriculumExtraction::factory()->for($file)->create([
+    $extraction = CurriculumExtraction::factory()->for($program)->for($file)->create([
         'requested_by' => User::factory()->admin()->create()->id,
         'source_hash' => $hash,
         'status' => CurriculumExtractionStatus::Processing,
+        'source_files' => [['id' => $file->id, 'content_hash' => $hash, 'title' => $file->title]],
     ]);
 
     Ai::fakeAgent(OfficialCurriculumExtractor::class, [[
@@ -54,12 +57,14 @@ test('extraction saves only validated structured output with source page provena
             'name' => 'Biology',
             'description' => 'Introduces the study of living systems.',
             'description_origin' => 'ai_generated',
+            'source_file_id' => $file->id,
             'source_page' => 4,
             'topics' => [[
                 'code' => null,
                 'title' => 'Cell structure',
                 'description' => 'Describes the parts and organization of a cell.',
                 'description_origin' => 'ai_generated',
+                'source_file_id' => $file->id,
                 'source_page' => 4,
                 'parent_index' => null,
             ]],
@@ -89,7 +94,8 @@ test('a duplicate first-attempt job cannot claim an extraction already processin
 
 test('extraction fails safely when the provider cites a page absent from the source', function () {
     $hash = str_repeat('d', 64);
-    $file = ProgramFile::factory()->create([
+    $program = Program::factory()->create();
+    $file = ProgramFile::factory()->for($program)->create([
         'content_hash' => $hash,
         'embedding_status' => FileEmbeddingStatus::Complete,
     ]);
@@ -105,9 +111,10 @@ test('extraction fails safely when the provider cites a page absent from the sou
         'embedding' => array_fill(0, 1024, 0.0),
         'embedded_at' => now(),
     ]);
-    $extraction = CurriculumExtraction::factory()->for($file)->create([
+    $extraction = CurriculumExtraction::factory()->for($program)->for($file)->create([
         'source_hash' => $hash,
         'status' => CurriculumExtractionStatus::Queued,
+        'source_files' => [['id' => $file->id, 'content_hash' => $hash, 'title' => $file->title]],
     ]);
 
     Ai::fakeAgent(OfficialCurriculumExtractor::class, [[
@@ -116,6 +123,7 @@ test('extraction fails safely when the provider cites a page absent from the sou
             'name' => 'Biology',
             'description' => null,
             'description_origin' => 'unavailable',
+            'source_file_id' => $file->id,
             'source_page' => 99,
             'topics' => [],
         ]],

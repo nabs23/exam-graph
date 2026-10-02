@@ -10,7 +10,6 @@ use App\Jobs\DeleteProgramFile;
 use App\Models\Program;
 use App\Models\ProgramFile;
 use App\Services\FileEmbeddingService;
-use App\Services\OfficialCurriculumExtractionService;
 use App\Services\SourceFileStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -77,14 +76,13 @@ class ProgramFileController extends Controller
         return response()->json($programFile->load('uploader:id,name')->makeHidden(['storage_key', 'storage_disk']));
     }
 
-    public function show(ProgramFile $programFile, FileEmbeddingService $fileEmbeddingService, OfficialCurriculumExtractionService $curriculumExtractionService): Response
+    public function show(ProgramFile $programFile, FileEmbeddingService $fileEmbeddingService): Response
     {
         $embeddingPreviews = collect();
         $embeddingDataBytes = null;
         $embeddingPageCount = null;
         $embeddingUnavailableReason = $fileEmbeddingService->unavailableReason();
         $embeddingsAvailable = $embeddingUnavailableReason === null;
-        $curriculumExtractionUnavailableReason = $curriculumExtractionService->unavailableReason();
 
         if ($programFile->embedding_status === FileEmbeddingStatus::Complete
             && Schema::hasTable('file_page_embeddings')) {
@@ -116,9 +114,6 @@ class ProgramFileController extends Controller
             'embeddingPreviews' => $embeddingPreviews,
             'embeddingDataBytes' => $embeddingDataBytes,
             'embeddingPageCount' => $embeddingPageCount,
-            'curriculumExtractionEnabled' => $curriculumExtractionUnavailableReason === null,
-            'curriculumExtractionUnavailableReason' => $curriculumExtractionUnavailableReason,
-            'latestCurriculumExtraction' => $programFile->curriculumExtractions()->latest()->first(),
         ]);
     }
 

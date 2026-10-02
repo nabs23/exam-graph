@@ -3,13 +3,13 @@ import { useEffect } from 'react';
 import { publish, reject } from '@/actions/App/Http/Controllers/CurriculumExtractionController';
 import { Button } from '@/components/ui/button';
 import programs from '@/routes/programs';
-import programFiles from '@/routes/program-files';
 
 type TopicProposal = {
     code: string | null;
     title: string;
     description: string | null;
     description_origin?: 'source' | 'ai_generated' | 'reviewer' | 'unavailable';
+    source_file_id: number;
     source_page: number;
     parent_index: number | null;
 };
@@ -19,6 +19,7 @@ type SubjectProposal = {
     name: string;
     description: string | null;
     description_origin?: 'source' | 'ai_generated' | 'reviewer' | 'unavailable';
+    source_file_id: number;
     source_page: number;
     topics: TopicProposal[];
 };
@@ -38,20 +39,18 @@ export default function CurriculumExtractionShow({
         provider: string;
         model: string;
         created_at: string;
-        program_file: {
-            id: number;
-            title: string;
-            program: { id: number; name: string; code: string };
-        };
+        program: { id: number; name: string; code: string };
+        source_files: { id: number; title: string; content_hash: string }[];
         requester: { name: string } | null;
         reviewer: { name: string } | null;
     };
     proposal: { subjects: SubjectProposal[] } | null;
     reviewedProposal: { subjects: (SubjectProposal & { topics: (TopicProposal & { parent_index: number | null })[] })[] } | null;
-    sourcePages: { page_number: number; text: string }[];
+    sourcePages: { source_file_id: number; page_number: number; text: string }[];
     canReview: boolean;
 }) {
-    const pages = new Map(sourcePages.map((page) => [page.page_number, page.text]));
+    const pages = new Map(sourcePages.map((page) => [`${page.source_file_id}:${page.page_number}`, page.text]));
+    const files = new Map(extraction.source_files.map((file) => [file.id, file.title]));
     const { start, stop } = usePoll(3000, { only: ['extraction', 'proposal', 'reviewedProposal', 'sourcePages', 'canReview'] }, {
         autoStart: false,
         mode: 'rest',
@@ -72,15 +71,15 @@ export default function CurriculumExtractionShow({
         <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
             <Head title="Official curriculum proposal" />
             <header className="space-y-2 border-b pb-6">
-                <p className="text-sm font-medium uppercase tracking-wide text-primary">{extraction.program_file.program.code}</p>
+                <p className="text-sm font-medium uppercase tracking-wide text-primary">{extraction.program.code}</p>
                 <h1 className="text-3xl font-semibold tracking-tight">Official curriculum proposal</h1>
                 <p className="text-muted-foreground">
-                    {extraction.program_file.title} · {extraction.status.replaceAll('_', ' ')}
+                    {extraction.status.replaceAll('_', ' ')} · {extraction.source_files.length} source {extraction.source_files.length === 1 ? 'file' : 'files'}
                 </p>
             </header>
 
             <dl className="grid gap-3 rounded-xl border bg-card p-4 text-sm sm:grid-cols-2">
-                <div><dt className="text-muted-foreground">Source PDF</dt><dd className="font-medium">{extraction.program_file.title}</dd></div>
+                <div><dt className="text-muted-foreground">Source PDFs</dt><dd className="font-medium">{extraction.source_files.map((file) => file.title).join(', ')}</dd></div>
                 <div><dt className="text-muted-foreground">Provider and model</dt><dd className="font-medium">{extraction.provider} · {extraction.model}</dd></div>
                 <div><dt className="text-muted-foreground">Requested by</dt><dd className="font-medium">{extraction.requester?.name ?? 'Unknown'}</dd></div>
                 <div><dt className="text-muted-foreground">Source version</dt><dd className="break-all font-mono text-xs">{extraction.source_hash}</dd></div>
@@ -108,7 +107,7 @@ export default function CurriculumExtractionShow({
                                             <label className="space-y-1 text-sm sm:col-span-2">{descriptionLabel(subject.description_origin)}<textarea className="w-full rounded-md border bg-background px-3 py-2" name={`subjects[${subjectIndex}][description]`} defaultValue={subject.description ?? ''} rows={2} /></label>
                                         </div>
                                     </div>
-                                    <Citation page={subject.source_page} text={pages.get(subject.source_page)} />
+                                    <Citation fileName={files.get(subject.source_file_id)} page={subject.source_page} text={pages.get(`${subject.source_file_id}:${subject.source_page}`)} />
                                     {subject.topics.length > 0 && <h2 className="font-medium">Syllabus topics</h2>}
                                     {subject.topics.map((topic, topicIndex) => (
                                         <div key={`${topic.title}-${topicIndex}`} className="ml-4 space-y-3 border-l-2 pl-4">
@@ -121,7 +120,7 @@ export default function CurriculumExtractionShow({
                                                     <label className="space-y-1 text-sm sm:col-span-2">{descriptionLabel(topic.description_origin)}<textarea className="w-full rounded-md border bg-background px-3 py-2" name={`subjects[${subjectIndex}][topics][${topicIndex}][description]`} defaultValue={topic.description ?? ''} rows={2} /></label>
                                                 </div>
                                             </div>
-                                            <Citation page={topic.source_page} text={pages.get(topic.source_page)} />
+                                            <Citation fileName={files.get(topic.source_file_id)} page={topic.source_page} text={pages.get(`${topic.source_file_id}:${topic.source_page}`)} />
                                             {topic.parent_index !== null && <p className="text-xs text-muted-foreground">Parent: {subject.topics[topic.parent_index]?.title ?? 'Unavailable'}</p>}
                                         </div>
                                     ))}
@@ -148,13 +147,13 @@ export default function CurriculumExtractionShow({
                         <div key={`${subject.code}-${subjectIndex}`} className="space-y-3 border-t pt-4">
                             <h2 className="text-lg font-semibold">{subject.code ? `${subject.code} · ` : ''}{subject.name}</h2>
                             {subject.description && <p className="text-sm text-muted-foreground">{subject.description}{subject.description_origin === 'ai_generated' && <span className="ml-2 text-xs">AI-drafted</span>}{subject.description_origin === 'reviewer' && <span className="ml-2 text-xs">Reviewer-edited</span>}</p>}
-                            <Citation page={subject.source_page} text={pages.get(subject.source_page)} />
+                            <Citation fileName={files.get(subject.source_file_id)} page={subject.source_page} text={pages.get(`${subject.source_file_id}:${subject.source_page}`)} />
                             <ul className="space-y-3">
                                 {subject.topics.map((topic, topicIndex) => (
                                     <li key={`${topic.code}-${topicIndex}`} className="ml-4 space-y-2 border-l-2 pl-4">
                                         <h3 className="font-medium">{topic.code ? `${topic.code} · ` : ''}{topic.title}</h3>
                                         {topic.description && <p className="text-sm text-muted-foreground">{topic.description}{topic.description_origin === 'ai_generated' && <span className="ml-2 text-xs">AI-drafted</span>}{topic.description_origin === 'reviewer' && <span className="ml-2 text-xs">Reviewer-edited</span>}</p>}
-                                        <Citation page={topic.source_page} text={pages.get(topic.source_page)} />
+                                        <Citation fileName={files.get(topic.source_file_id)} page={topic.source_page} text={pages.get(`${topic.source_file_id}:${topic.source_page}`)} />
                                     </li>
                                 ))}
                             </ul>
@@ -168,10 +167,10 @@ export default function CurriculumExtractionShow({
     );
 }
 
-function Citation({ page, text }: { page: number; text?: string }) {
+function Citation({ fileName, page, text }: { fileName?: string; page: number; text?: string }) {
     return (
         <details className="rounded-md bg-muted/60 p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Source page {page}</summary>
+            <summary className="cursor-pointer font-medium">{fileName ?? 'Source file'} · page {page}</summary>
             <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{text ?? 'Source page text is no longer available.'}</p>
         </details>
     );
@@ -193,10 +192,9 @@ function descriptionLabel(origin: TopicProposal['description_origin']): string {
     return 'Description (source-supported)';
 }
 
-CurriculumExtractionShow.layout = (props: { extraction: { program_file: { id: number; program: { id: number } } } }) => ({
+CurriculumExtractionShow.layout = (props: { extraction: { program: { id: number } } }) => ({
     breadcrumbs: [
-        { title: 'Program', href: programs.show(props.extraction.program_file.program) },
-        { title: 'Program file', href: programFiles.show(props.extraction.program_file) },
-        { title: 'Curriculum review', href: programFiles.show(props.extraction.program_file) },
+        { title: 'Program', href: programs.show(props.extraction.program) },
+        { title: 'Curriculum review', href: programs.show(props.extraction.program) },
     ],
 });

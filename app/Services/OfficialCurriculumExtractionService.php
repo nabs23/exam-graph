@@ -9,6 +9,7 @@ use App\FileUploadStatus;
 use App\Jobs\ExtractOfficialCurriculum;
 use App\Models\CurriculumExtraction;
 use App\Models\FilePageEmbedding;
+use App\Models\Program;
 use App\Models\ProgramFile;
 use App\Models\Subject;
 use App\Models\User;
@@ -47,33 +48,31 @@ class OfficialCurriculumExtractionService
         }
     }
 
-    public function queue(ProgramFile $file, User $requester): CurriculumExtraction
+    public function queue(Program $program, User $requester): CurriculumExtraction
     {
         $this->assertReady();
 
-        $pages = $this->sourcePages($file);
-        $sourceHash = (string) $file->content_hash;
+        return DB::transaction(function () use ($program, $requester): CurriculumExtraction {
+            $lockedProgram = Program::query()->lockForUpdate()->findOrFail($program->id);
+            $files = $this->sourceFiles($lockedProgram, lock: true);
+            $this->sourcePages($files);
+            $snapshot = $this->sourceSnapshot($files);
+            $sourceHash = hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR));
 
-        $extraction = DB::transaction(function () use ($file, $requester, $sourceHash): CurriculumExtraction {
-            $lockedFile = ProgramFile::query()->lockForUpdate()->findOrFail($file->id);
-
-            if ($lockedFile->content_hash !== $sourceHash || $lockedFile->embedding_status !== FileEmbeddingStatus::Complete) {
-                throw ValidationException::withMessages(['file' => 'The source file changed. Recheck its completed text embeddings before extracting curriculum.']);
-            }
-
-            $inProgress = $lockedFile->curriculumExtractions()
+            $inProgress = $lockedProgram->curriculumExtractions()
                 ->where('source_hash', $sourceHash)
                 ->whereIn('status', [CurriculumExtractionStatus::Queued, CurriculumExtractionStatus::Processing, CurriculumExtractionStatus::Reviewing])
                 ->exists();
 
             if ($inProgress) {
-                throw ValidationException::withMessages(['file' => 'An extraction for this file version is already in progress or awaiting review.']);
+                throw ValidationException::withMessages(['program' => 'An extraction for these program-file versions is already in progress or awaiting review.']);
             }
 
-            $extraction = $lockedFile->curriculumExtractions()->create([
+            $extraction = $lockedProgram->curriculumExtractions()->create([
                 'requested_by' => $requester->id,
                 'status' => CurriculumExtractionStatus::Queued,
                 'source_hash' => $sourceHash,
+                'source_files' => $snapshot,
                 'provider' => (string) config('ai.official_curriculum.provider'),
                 'model' => (string) config('ai.official_curriculum.model'),
                 'prompt_version' => self::PROMPT_VERSION,
@@ -83,8 +82,6 @@ class OfficialCurriculumExtractionService
 
             return $extraction;
         });
-
-        return $extraction;
     }
 
     public function extract(int $extractionId, bool $isRetry = false): void
@@ -102,20 +99,20 @@ class OfficialCurriculumExtractionService
             return;
         }
 
-        $extraction = CurriculumExtraction::query()->with('programFile')->findOrFail($extractionId);
+        $extraction = CurriculumExtraction::query()->with('program')->findOrFail($extractionId);
 
         try {
             $this->assertReady();
-            $file = $extraction->programFile;
-
-            if ($file->content_hash !== $extraction->source_hash || $file->embedding_status !== FileEmbeddingStatus::Complete) {
+            if ($extraction->program === null || ! $this->snapshotIsCurrent($extraction)) {
                 $this->fail($extraction, 'source_changed');
 
                 return;
             }
 
-            $pages = $this->sourcePages($file);
+            $files = $this->sourceFilesForSnapshot($extraction);
+            $pages = $this->sourcePages($files);
             $input = json_encode(['source_pages' => $pages->map(fn (FilePageEmbedding $page): array => [
+                'source_file_id' => $page->program_file_id,
                 'page_number' => $page->page_number,
                 'text' => $page->content,
             ])->all()], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
@@ -138,7 +135,7 @@ class OfficialCurriculumExtractionService
             }
 
             try {
-                $proposal = $this->validateProposal($response->toArray(), $pages->pluck('page_number')->map(fn ($number): int => (int) $number)->all());
+                $proposal = $this->validateProposal($response->toArray(), $pages);
             } catch (RuntimeException) {
                 $this->fail($extraction, 'invalid_proposal');
 
@@ -151,8 +148,7 @@ class OfficialCurriculumExtractionService
                 return;
             }
 
-            $currentFile = ProgramFile::query()->findOrFail($file->id);
-            if ($currentFile->content_hash !== $extraction->source_hash || $currentFile->embedding_status !== FileEmbeddingStatus::Complete) {
+            if (! $this->snapshotIsCurrent($extraction)) {
                 $this->fail($extraction, 'source_changed');
 
                 return;
@@ -178,15 +174,13 @@ class OfficialCurriculumExtractionService
         $sourceChanged = false;
 
         DB::transaction(function () use ($extraction, $selections, $reviewer, &$sourceChanged): void {
-            $locked = CurriculumExtraction::query()->with('programFile')->lockForUpdate()->findOrFail($extraction->id);
+            $locked = CurriculumExtraction::query()->with('program')->lockForUpdate()->findOrFail($extraction->id);
 
             if ($locked->status !== CurriculumExtractionStatus::Reviewing || ! is_array($locked->proposal)) {
                 throw ValidationException::withMessages(['extraction' => 'Only a proposal awaiting review can be published.']);
             }
 
-            $sourceFile = ProgramFile::query()->lockForUpdate()->findOrFail($locked->program_file_id);
-            if ($sourceFile->content_hash !== $locked->source_hash
-                || $sourceFile->embedding_status !== FileEmbeddingStatus::Complete) {
+            if ($locked->program === null || ! $this->snapshotIsCurrent($locked, lock: true)) {
                 $locked->forceFill(['status' => CurriculumExtractionStatus::Failed, 'error_code' => 'source_changed'])->save();
                 $sourceChanged = true;
 
@@ -241,6 +235,7 @@ class OfficialCurriculumExtractionService
                         'title' => $title,
                         'description' => $description,
                         'description_origin' => $this->reviewedDescriptionOrigin($description, $topicProposal),
+                        'source_file_id' => $topicProposal['source_file_id'],
                         'source_page' => $topicProposal['source_page'],
                         'parent_index' => $parentIndex === null ? null : $selectedTopicPositions[$parentIndex],
                     ];
@@ -253,6 +248,7 @@ class OfficialCurriculumExtractionService
                     'code' => $code === '' ? null : $code,
                     'description' => $description,
                     'description_origin' => $this->reviewedDescriptionOrigin($description, $subjectProposal),
+                    'source_file_id' => $subjectProposal['source_file_id'],
                     'source_page' => $subjectProposal['source_page'],
                     'topics' => $selectedTopics,
                 ];
@@ -262,15 +258,15 @@ class OfficialCurriculumExtractionService
                 throw ValidationException::withMessages(['subjects' => 'Select at least one subject to publish.']);
             }
 
-            $this->assertUniqueCodes($selected, (int) $sourceFile->program_id);
+            $this->assertUniqueCodes($selected, $locked->program->id);
 
             foreach ($selected as $subjectOrder => $subjectData) {
                 $subject = Subject::query()->create([
-                    'program_id' => $sourceFile->program_id,
+                    'program_id' => $locked->program->id,
                     'name' => $subjectData['name'],
                     'code' => $subjectData['code'],
                     'description' => $subjectData['description'],
-                    'sort_order' => ((int) Subject::query()->where('program_id', $sourceFile->program_id)->max('sort_order')) + 1,
+                    'sort_order' => ((int) Subject::query()->where('program_id', $locked->program->id)->max('sort_order')) + 1,
                 ]);
 
                 $createdTopics = [];
@@ -297,7 +293,7 @@ class OfficialCurriculumExtractionService
         });
 
         if ($sourceChanged) {
-            throw ValidationException::withMessages(['extraction' => 'The source file changed after extraction. Create a new extraction before publishing.']);
+            throw ValidationException::withMessages(['extraction' => 'A source file changed after extraction. Create a new extraction before publishing.']);
         }
     }
 
@@ -318,38 +314,106 @@ class OfficialCurriculumExtractionService
         });
     }
 
-    /** @return Collection<int, FilePageEmbedding> */
-    public function sourcePages(ProgramFile $file): Collection
+    /** @return Collection<int, ProgramFile> */
+    private function sourceFiles(Program $program, bool $lock = false): Collection
     {
-        if ($file->upload_status !== FileUploadStatus::Uploaded || $file->mime_type !== 'application/pdf'
-            || $file->embedding_status !== FileEmbeddingStatus::Complete || blank($file->content_hash)) {
-            throw ValidationException::withMessages(['file' => 'Only uploaded PDFs with completed text embeddings can be used.']);
+        $query = $program->files()
+            ->where('upload_status', FileUploadStatus::Uploaded)
+            ->where('mime_type', 'application/pdf')
+            ->where('embedding_status', FileEmbeddingStatus::Complete)
+            ->whereNotNull('content_hash')
+            ->orderBy('id');
+
+        if ($lock) {
+            $query->lockForUpdate();
         }
 
-        $pages = $file->pageEmbeddings()
-            ->where('source_hash', $file->content_hash)
-            ->whereNotNull('content')
-            ->orderBy('page_number')
-            ->get(['id', 'program_file_id', 'page_number', 'source_hash', 'content']);
+        $files = $query->get();
+        if ($files->isEmpty()) {
+            throw ValidationException::withMessages(['program' => 'Add at least one uploaded PDF with completed text embeddings before extracting curriculum.']);
+        }
 
-        if ($pages->isEmpty() || $pages->contains(fn (FilePageEmbedding $page): bool => blank($page->content))) {
-            throw ValidationException::withMessages(['file' => 'The source has no usable extracted page text.']);
+        return $files;
+    }
+
+    /** @return Collection<int, ProgramFile> */
+    private function sourceFilesForSnapshot(CurriculumExtraction $extraction): Collection
+    {
+        $snapshot = $extraction->source_files;
+        if (! is_array($snapshot) || $snapshot === []) {
+            throw new RuntimeException('The extraction source snapshot is unavailable.');
+        }
+
+        $files = ProgramFile::query()->whereIn('id', collect($snapshot)->pluck('id'))->orderBy('id')->get();
+        if ($files->count() !== count($snapshot)) {
+            throw new RuntimeException('The extraction source snapshot changed.');
+        }
+
+        return $files;
+    }
+
+    /** @param Collection<int, ProgramFile> $files
+     * @return Collection<int, FilePageEmbedding>
+     */
+    private function sourcePages(Collection $files): Collection
+    {
+        $sourceHashes = $files->mapWithKeys(fn (ProgramFile $file): array => [$file->id => $file->content_hash]);
+        $pages = FilePageEmbedding::query()
+            ->whereIn('program_file_id', $files->pluck('id'))
+            ->whereNotNull('content')
+            ->orderBy('program_file_id')
+            ->orderBy('page_number')
+            ->get(['id', 'program_file_id', 'page_number', 'source_hash', 'content'])
+            ->filter(fn (FilePageEmbedding $page): bool => $page->source_hash === $sourceHashes[$page->program_file_id]);
+
+        if ($pages->isEmpty() || $files->contains(fn (ProgramFile $file): bool => ! $pages->contains('program_file_id', $file->id)) || $pages->contains(fn (FilePageEmbedding $page): bool => blank($page->content))) {
+            throw ValidationException::withMessages(['program' => 'Every selected source file needs usable extracted page text.']);
         }
 
         $characterCount = $pages->sum(fn (FilePageEmbedding $page): int => mb_strlen($page->content));
         $maximumCharacters = min(250000, max(1000, (int) config('ai.official_curriculum.max_characters', 120000)));
         if ($characterCount > $maximumCharacters) {
-            throw ValidationException::withMessages(['file' => 'The extracted text exceeds the configured processing limit.']);
+            throw ValidationException::withMessages(['program' => 'The combined extracted text exceeds the configured processing limit.']);
         }
 
         return $pages;
     }
 
+    /** @param Collection<int, ProgramFile> $files
+     * @return array<int, array{id: int, content_hash: string, title: string}>
+     */
+    private function sourceSnapshot(Collection $files): array
+    {
+        return $files->map(fn (ProgramFile $file): array => [
+            'id' => $file->id,
+            'content_hash' => $file->content_hash,
+            'title' => $file->title,
+        ])->all();
+    }
+
+    private function snapshotIsCurrent(CurriculumExtraction $extraction, bool $lock = false): bool
+    {
+        try {
+            $files = $this->sourceFilesForSnapshot($extraction);
+        } catch (RuntimeException) {
+            return false;
+        }
+
+        if ($lock) {
+            $files = ProgramFile::query()->whereKey($files->pluck('id'))->orderBy('id')->lockForUpdate()->get();
+        }
+
+        return $this->sourceSnapshot($files) === $extraction->source_files
+            && $files->every(fn (ProgramFile $file): bool => $file->upload_status === FileUploadStatus::Uploaded
+                && $file->mime_type === 'application/pdf'
+                && $file->embedding_status === FileEmbeddingStatus::Complete);
+    }
+
     /** @param array<string, mixed> $raw
-     * @param  array<int, int>  $sourcePageNumbers
+     * @param  Collection<int, FilePageEmbedding>  $sourcePages
      * @return array{subjects: array<int, array<string, mixed>>}
      */
-    private function validateProposal(array $raw, array $sourcePageNumbers): array
+    private function validateProposal(array $raw, Collection $sourcePages): array
     {
         if (! isset($raw['subjects']) || ! is_array($raw['subjects']) || count($raw['subjects']) > 100) {
             throw new RuntimeException('Invalid curriculum proposal.');
@@ -357,7 +421,7 @@ class OfficialCurriculumExtractionService
 
         $subjects = [];
         foreach ($raw['subjects'] as $subject) {
-            if (! is_array($subject) || ! $this->validText($subject['name'] ?? null, 255) || ! $this->validPage($subject['source_page'] ?? null, $sourcePageNumbers)) {
+            if (! is_array($subject) || ! $this->validText($subject['name'] ?? null, 255) || ! $this->validSource($subject['source_file_id'] ?? null, $subject['source_page'] ?? null, $sourcePages)) {
                 throw new RuntimeException('Invalid curriculum proposal.');
             }
 
@@ -380,7 +444,7 @@ class OfficialCurriculumExtractionService
 
                 $parentIndex = $topic['parent_index'] ?? null;
                 if (! $this->validText($topic['title'] ?? null, 255)
-                    || ! $this->validPage($topic['source_page'] ?? null, $sourcePageNumbers)
+                    || ! $this->validSource($topic['source_file_id'] ?? null, $topic['source_page'] ?? null, $sourcePages)
                     || ! $this->validNullableText($topic['code'] ?? null, 50)
                     || ! $this->validNullableText($topic['description'] ?? null, 2000)
                     || ! $this->validDescriptionOrigin($topic['description_origin'] ?? null, $topic['description'] ?? null)
@@ -393,6 +457,7 @@ class OfficialCurriculumExtractionService
                     'title' => trim($topic['title']),
                     'description' => $this->nullableString($topic['description'] ?? null),
                     'description_origin' => $topic['description_origin'],
+                    'source_file_id' => (int) $topic['source_file_id'],
                     'source_page' => (int) $topic['source_page'],
                     'parent_index' => $parentIndex,
                 ];
@@ -403,6 +468,7 @@ class OfficialCurriculumExtractionService
                 'name' => trim($subject['name']),
                 'description' => $this->nullableString($subject['description'] ?? null),
                 'description_origin' => $subject['description_origin'],
+                'source_file_id' => (int) $subject['source_file_id'],
                 'source_page' => (int) $subject['source_page'],
                 'topics' => $normalizedTopics,
             ];
@@ -459,10 +525,11 @@ class OfficialCurriculumExtractionService
         }
     }
 
-    /** @param array<int, int> $pages */
-    private function validPage(mixed $page, array $pages): bool
+    /** @param Collection<int, FilePageEmbedding> $sourcePages */
+    private function validSource(mixed $fileId, mixed $page, Collection $sourcePages): bool
     {
-        return is_int($page) && in_array($page, $pages, true);
+        return is_int($fileId) && is_int($page)
+            && $sourcePages->contains(fn (FilePageEmbedding $source): bool => $source->program_file_id === $fileId && $source->page_number === $page);
     }
 
     private function validText(mixed $value, int $maxLength): bool
