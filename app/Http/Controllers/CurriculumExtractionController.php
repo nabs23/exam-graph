@@ -15,6 +15,35 @@ use Inertia\Response;
 
 class CurriculumExtractionController extends Controller
 {
+    public function index(Program $program): Response
+    {
+        return Inertia::render('admin/curriculum-extractions/index', [
+            'program' => $program->only(['id', 'name', 'code']),
+            'extractions' => $program->curriculumExtractions()
+                ->with(['requester:id,name', 'reviewer:id,name'])
+                ->latest()
+                ->get([
+                    'id', 'program_id', 'status', 'source_hash', 'source_files', 'provider', 'model', 'prompt_version',
+                    'error_code', 'requested_by', 'reviewed_by', 'reviewed_at', 'reviewed_proposal', 'created_at', 'updated_at',
+                ])
+                ->map(fn (CurriculumExtraction $extraction): array => [
+                    'id' => $extraction->id,
+                    'status' => $extraction->status,
+                    'source_hash' => $extraction->source_hash,
+                    'source_files' => $extraction->source_files,
+                    'provider' => $extraction->provider,
+                    'model' => $extraction->model,
+                    'prompt_version' => $extraction->prompt_version,
+                    'error_code' => $extraction->error_code,
+                    'created_at' => $extraction->created_at,
+                    'reviewed_at' => $extraction->reviewed_at,
+                    'requester' => $extraction->requester?->only(['name']),
+                    'reviewer' => $extraction->reviewer?->only(['name']),
+                    'can_delete' => $extraction->status === CurriculumExtractionStatus::Failed || $extraction->reviewed_proposal === null,
+                ]),
+        ]);
+    }
+
     public function store(
         StoreCurriculumExtractionRequest $request,
         Program $program,
@@ -71,5 +100,19 @@ class CurriculumExtractionController extends Controller
         $service->reject($curriculumExtraction, request()->user());
 
         return back()->with('success', 'The curriculum proposal was rejected.');
+    }
+
+    public function destroy(Program $program, CurriculumExtraction $curriculumExtraction): RedirectResponse
+    {
+        abort_unless($curriculumExtraction->program_id === $program->id, 404);
+        abort_unless(
+            $curriculumExtraction->status === CurriculumExtractionStatus::Failed || $curriculumExtraction->reviewed_proposal === null,
+            422,
+            'Published curriculum extraction records cannot be deleted.',
+        );
+
+        $curriculumExtraction->delete();
+
+        return back()->with('success', 'The curriculum extraction was deleted.');
     }
 }

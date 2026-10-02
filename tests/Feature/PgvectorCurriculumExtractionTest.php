@@ -9,6 +9,7 @@ use App\Models\Program;
 use App\Models\ProgramFile;
 use App\Models\User;
 use App\Services\OfficialCurriculumExtractionService;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Ai;
 
@@ -90,6 +91,44 @@ test('a duplicate first-attempt job cannot claim an extraction already processin
 
     expect($extraction->fresh()->status)->toBe(CurriculumExtractionStatus::Processing);
     Ai::assertAgentNeverPrompted(OfficialCurriculumExtractor::class);
+});
+
+test('a changed extraction model can queue a new proposal for the same source snapshot', function () {
+    Bus::fake();
+    $hash = str_repeat('e', 64);
+    $program = Program::factory()->create();
+    $file = ProgramFile::factory()->for($program)->create([
+        'content_hash' => $hash,
+        'embedding_status' => FileEmbeddingStatus::Complete,
+    ]);
+    FilePageEmbedding::query()->create([
+        'program_file_id' => $file->id,
+        'source_key' => 'program_file:'.$file->id,
+        'page_number' => 1,
+        'source_hash' => $hash,
+        'provider' => 'voyageai',
+        'model' => 'voyage-4',
+        'dimensions' => 1024,
+        'content' => 'Official subject: Biology.',
+        'embedding' => array_fill(0, 1024, 0.0),
+        'embedded_at' => now(),
+    ]);
+    $snapshot = [['id' => $file->id, 'content_hash' => $hash, 'title' => $file->title]];
+    $sourceHash = hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR));
+    CurriculumExtraction::factory()->for($program)->create([
+        'source_hash' => $sourceHash,
+        'source_files' => $snapshot,
+        'provider' => 'openai',
+        'model' => 'gpt-4.1-mini',
+        'status' => CurriculumExtractionStatus::Reviewing,
+    ]);
+    config(['ai.official_curriculum.model' => 'gpt-4.1']);
+
+    $extraction = app(OfficialCurriculumExtractionService::class)->queue($program, User::factory()->admin()->create());
+
+    expect($extraction->status)->toBe(CurriculumExtractionStatus::Queued)
+        ->and($extraction->model)->toBe('gpt-4.1')
+        ->and($extraction->source_hash)->toBe($sourceHash);
 });
 
 test('extraction fails safely when the provider cites a page absent from the source', function () {

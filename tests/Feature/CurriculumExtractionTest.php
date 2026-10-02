@@ -197,6 +197,68 @@ test('an administrator can queue extraction from a program with completed embedd
         ->assertRedirect(route('curriculum-extractions.show', $extraction));
 });
 
+test('an administrator can view all curriculum extractions for a program', function () {
+    $program = Program::factory()->create();
+    $requester = User::factory()->admin()->create();
+    $extraction = CurriculumExtraction::factory()->for($program)->create([
+        'requested_by' => $requester->id,
+        'source_files' => [[
+            'id' => 100,
+            'title' => 'Official syllabus.pdf',
+            'content_hash' => str_repeat('d', 64),
+        ]],
+    ]);
+    CurriculumExtraction::factory()->create();
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->get(route('programs.curriculum-extractions.index', $program))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('admin/curriculum-extractions/index')
+            ->where('program.id', $program->id)
+            ->has('extractions', 1)
+            ->where('extractions.0.id', $extraction->id)
+            ->where('extractions.0.source_files.0.title', 'Official syllabus.pdf')
+            ->where('extractions.0.requester.name', $requester->name));
+});
+
+test('an administrator can delete failed and unreviewed curriculum extractions', function () {
+    $program = Program::factory()->create();
+    $failed = CurriculumExtraction::factory()->for($program)->create([
+        'status' => CurriculumExtractionStatus::Failed,
+        'reviewed_proposal' => ['subjects' => []],
+    ]);
+    $unreviewed = CurriculumExtraction::factory()->for($program)->create([
+        'status' => CurriculumExtractionStatus::Reviewing,
+        'reviewed_proposal' => null,
+    ]);
+    $user = User::factory()->admin()->create();
+
+    $this->actingAs($user)
+        ->delete(route('programs.curriculum-extractions.destroy', [$program, $failed]))
+        ->assertRedirect();
+    $this->actingAs($user)
+        ->delete(route('programs.curriculum-extractions.destroy', [$program, $unreviewed]))
+        ->assertRedirect();
+
+    $this->assertDatabaseMissing('curriculum_extractions', ['id' => $failed->id]);
+    $this->assertDatabaseMissing('curriculum_extractions', ['id' => $unreviewed->id]);
+});
+
+test('an administrator cannot delete a reviewed curriculum extraction', function () {
+    $program = Program::factory()->create();
+    $extraction = CurriculumExtraction::factory()->for($program)->create([
+        'status' => CurriculumExtractionStatus::Published,
+        'reviewed_proposal' => ['subjects' => []],
+    ]);
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->delete(route('programs.curriculum-extractions.destroy', [$program, $extraction]))
+        ->assertStatus(422);
+
+    $this->assertDatabaseHas('curriculum_extractions', ['id' => $extraction->id]);
+});
+
 test('curriculum extraction is hidden when the feature is unavailable', function () {
     $program = Program::factory()->create();
 

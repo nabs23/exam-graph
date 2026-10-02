@@ -1,5 +1,5 @@
 import { Form, Head, Link } from "@inertiajs/react";
-import { show as curriculumExtractionShow, store as storeCurriculumExtraction } from '@/actions/App/Http/Controllers/CurriculumExtractionController';
+import { index as curriculumExtractionsIndex, show as curriculumExtractionShow, store as storeCurriculumExtraction } from '@/actions/App/Http/Controllers/CurriculumExtractionController';
 import { Button } from '@/components/ui/button';
 import { SourceFiles } from "@/components/source-files";
 import programs from "@/routes/programs";
@@ -52,10 +52,10 @@ export default function Program({
                         <p className="text-sm text-muted-foreground">Build one reviewer-controlled proposal from all completed program PDFs.</p>
                     </div>
                     <Form {...storeCurriculumExtraction.form(program)}>
-                        {({ processing }) => <><input type="hidden" name="confirmation" value="1" /><Button type="submit" disabled={processing || !curriculumExtractionEnabled}>{processing ? 'Starting…' : 'Extract curriculum'}</Button></>}
+                        {({ processing, errors }) => <div className="space-y-2"><input type="hidden" name="confirmation" value="1" /><Button type="submit" disabled={processing || !curriculumExtractionEnabled}>{processing ? 'Starting…' : 'Extract curriculum'}</Button>{errors.program && <p role="alert" className="text-sm text-destructive">{errors.program}</p>}</div>}
                     </Form>
                 </div>
-                {latestCurriculumExtraction && <p className="text-sm text-muted-foreground">Latest proposal: <Link className="underline" href={curriculumExtractionShow(latestCurriculumExtraction.id)}>{latestCurriculumExtraction.status.replaceAll('_', ' ')}</Link></p>}
+                <p className="text-sm text-muted-foreground"><Link className="underline" href={curriculumExtractionsIndex(program)}>View all extractions</Link>{latestCurriculumExtraction && <> · Latest proposal: <Link className="underline" href={curriculumExtractionShow(latestCurriculumExtraction.id)}>{latestCurriculumExtraction.status.replaceAll('_', ' ')}</Link></>}</p>
                 {curriculumExtractionUnavailableReason && <p className="text-sm text-muted-foreground">{curriculumExtractionUnavailableReason}</p>}
             </section>
             <div className="flex items-center justify-between">

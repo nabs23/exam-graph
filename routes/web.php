@@ -40,7 +40,9 @@ Route::middleware(['auth', 'verified', 'can:manage-content'])->group(function ()
     Route::delete('files/{programFile}', [ProgramFileController::class, 'destroy'])->name('program-files.destroy');
     Route::post('files/{programFile}/download', [ProgramFileController::class, 'download'])->name('program-files.download');
     Route::post('files/{programFile}/embeddings', [ProgramFileController::class, 'embed'])->middleware('throttle:5,1')->name('program-files.embeddings.store');
+    Route::get('programs/{program}/curriculum-extractions', [CurriculumExtractionController::class, 'index'])->name('programs.curriculum-extractions.index');
     Route::post('programs/{program}/curriculum-extractions', [CurriculumExtractionController::class, 'store'])->middleware('throttle:2,1')->name('programs.curriculum-extractions.store');
+    Route::delete('programs/{program}/curriculum-extractions/{curriculumExtraction}', [CurriculumExtractionController::class, 'destroy'])->scopeBindings()->name('programs.curriculum-extractions.destroy');
     Route::get('curriculum-extractions/{curriculumExtraction}', [CurriculumExtractionController::class, 'show'])->name('curriculum-extractions.show');
     Route::post('curriculum-extractions/{curriculumExtraction}/publish', [CurriculumExtractionController::class, 'publish'])->name('curriculum-extractions.publish');
     Route::post('curriculum-extractions/{curriculumExtraction}/reject', [CurriculumExtractionController::class, 'reject'])->name('curriculum-extractions.reject');

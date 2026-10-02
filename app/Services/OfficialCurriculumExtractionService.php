@@ -58,14 +58,19 @@ class OfficialCurriculumExtractionService
             $this->sourcePages($files);
             $snapshot = $this->sourceSnapshot($files);
             $sourceHash = hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR));
+            $provider = (string) config('ai.official_curriculum.provider');
+            $model = (string) config('ai.official_curriculum.model');
 
             $inProgress = $lockedProgram->curriculumExtractions()
                 ->where('source_hash', $sourceHash)
+                ->where('provider', $provider)
+                ->where('model', $model)
+                ->where('prompt_version', self::PROMPT_VERSION)
                 ->whereIn('status', [CurriculumExtractionStatus::Queued, CurriculumExtractionStatus::Processing, CurriculumExtractionStatus::Reviewing])
                 ->exists();
 
             if ($inProgress) {
-                throw ValidationException::withMessages(['program' => 'An extraction for these program-file versions is already in progress or awaiting review.']);
+                throw ValidationException::withMessages(['program' => 'An extraction with these source files, provider, model, and prompt version is already in progress or awaiting review.']);
             }
 
             $extraction = $lockedProgram->curriculumExtractions()->create([
@@ -73,8 +78,8 @@ class OfficialCurriculumExtractionService
                 'status' => CurriculumExtractionStatus::Queued,
                 'source_hash' => $sourceHash,
                 'source_files' => $snapshot,
-                'provider' => (string) config('ai.official_curriculum.provider'),
-                'model' => (string) config('ai.official_curriculum.model'),
+                'provider' => $provider,
+                'model' => $model,
                 'prompt_version' => self::PROMPT_VERSION,
             ]);
 
