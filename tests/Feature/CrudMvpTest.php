@@ -169,6 +169,26 @@ test('topic routes resolve the requested topic for viewing editing updating and 
     $this->get($topic->curriculumRoute('topics.show'))->assertNotFound();
 });
 
+test('content administrators can create a child topic', function () {
+    $subject = Subject::factory()->create();
+    $parent = SyllabusTopic::factory()->for($subject)->create();
+    $this->actingAs(User::factory()->admin()->create());
+
+    $this->post(route('topics.store', $subject->curriculumRouteParameters()), [
+        'parent_id' => $parent->id,
+        'code' => 'FAR-1.1',
+        'title' => 'Initial measurement',
+        'description' => 'Measure the asset when it is first recognized.',
+    ])->assertRedirect($subject->curriculumRoute('subjects.show'));
+
+    $this->assertDatabaseHas('syllabus_topics', [
+        'subject_id' => $subject->id,
+        'parent_id' => $parent->id,
+        'code' => 'FAR-1.1',
+        'title' => 'Initial measurement',
+    ]);
+});
+
 test('the subject outline includes nested topics and concept assignments', function () {
     $subject = Subject::factory()->create();
     $parent = SyllabusTopic::factory()->for($subject)->create(['sort_order' => 0]);

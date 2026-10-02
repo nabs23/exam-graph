@@ -1,4 +1,6 @@
-import { Head, Link } from '@inertiajs/react';
+import { Form, Head, Link } from '@inertiajs/react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { concepts, topicConcepts } from '@/lib/curriculum-routes';
 import { topics } from '@/lib/curriculum-routes';
 import { subjects } from '@/lib/curriculum-routes';
@@ -33,8 +35,34 @@ export default function TopicShow({ topic }: { topic: Topic }) {
                     <Link href={topics.edit(topic)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Edit topic</Link>
                 </div>
             </header>
-            <section className="space-y-3">
-                <h2 className="text-xl font-semibold">Child topics</h2>
+            <section className="space-y-4">
+                <div>
+                    <h2 className="text-xl font-semibold">Child topics</h2>
+                    <p className="text-sm text-muted-foreground">Add a topic nested beneath {topic.title}.</p>
+                </div>
+                <Form {...subjectTopics.store.form(topic.subject)} className="grid gap-4 rounded-xl border bg-card p-4 shadow-sm sm:grid-cols-2">
+                    {({ errors, processing }) => <>
+                        <input type="hidden" name="parent_id" value={topic.id} />
+                        <label className="grid gap-2 text-sm font-medium">
+                            Title
+                            <Input name="title" required aria-invalid={Boolean(errors.title)} />
+                            {errors.title && <p role="alert" className="text-sm text-destructive">{errors.title}</p>}
+                        </label>
+                        <label className="grid gap-2 text-sm font-medium">
+                            Code <span className="font-normal text-muted-foreground">(optional)</span>
+                            <Input name="code" aria-invalid={Boolean(errors.code)} />
+                            {errors.code && <p role="alert" className="text-sm text-destructive">{errors.code}</p>}
+                        </label>
+                        <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+                            Description <span className="font-normal text-muted-foreground">(optional)</span>
+                            <textarea name="description" className="min-h-24 w-full rounded-md border border-input bg-background p-3 text-sm" aria-invalid={Boolean(errors.description)} />
+                            {errors.description && <p role="alert" className="text-sm text-destructive">{errors.description}</p>}
+                        </label>
+                        <div className="sm:col-span-2">
+                            <Button type="submit" disabled={processing}>{processing ? 'Creating…' : 'Create child topic'}</Button>
+                        </div>
+                    </>}
+                </Form>
                 {topic.children.length === 0 ? <p className="text-sm text-muted-foreground">No child topics have been added yet.</p> : (
                     <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{topic.children.map((child) => <li key={child.id}><Link href={topics.show(child)} className="block h-full rounded-xl border bg-card p-4 shadow-sm hover:bg-accent"><p className="font-medium">{child.code ? `${child.code} · ` : ''}{child.title}</p>{child.description && <p className="mt-2 text-sm text-muted-foreground">{child.description}</p>}</Link></li>)}</ul>
                 )}
