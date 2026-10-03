@@ -1,6 +1,5 @@
-import { Form, Head, Link } from "@inertiajs/react";
-import { index as curriculumExtractionsIndex, show as curriculumExtractionShow, store as storeCurriculumExtraction } from '@/actions/App/Http/Controllers/CurriculumExtractionController';
-import { Button } from '@/components/ui/button';
+import { Head, Link } from "@inertiajs/react";
+import { OfficialCurriculumExtraction } from "@/components/official-curriculum-extraction";
 import { SourceFiles } from "@/components/source-files";
 import programs from "@/routes/programs";
 import { programSubjects, subjects } from '@/lib/curriculum-routes';
@@ -10,6 +9,8 @@ export default function Program({
     curriculumExtractionEnabled,
     curriculumExtractionUnavailableReason,
     latestCurriculumExtraction,
+    curriculumExtractionModels,
+    curriculumExtractionDefaultModel,
 }: {
     program: {
         id: number;
@@ -22,6 +23,8 @@ export default function Program({
     curriculumExtractionEnabled: boolean;
     curriculumExtractionUnavailableReason: string | null;
     latestCurriculumExtraction: { id: number; status: string } | null;
+    curriculumExtractionModels: string[];
+    curriculumExtractionDefaultModel: string | null;
 }) {
     return (
         <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -45,19 +48,14 @@ export default function Program({
                     Edit program
                 </Link>
             </div>
-            <section className="space-y-3 rounded-xl border bg-card p-5 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h2 className="text-xl font-semibold">Official curriculum</h2>
-                        <p className="text-sm text-muted-foreground">Build one reviewer-controlled proposal from all completed program PDFs.</p>
-                    </div>
-                    <Form {...storeCurriculumExtraction.form(program)}>
-                        {({ processing, errors }) => <div className="space-y-2"><input type="hidden" name="confirmation" value="1" /><Button type="submit" disabled={processing || !curriculumExtractionEnabled}>{processing ? 'Starting…' : 'Extract curriculum'}</Button>{errors.program && <p role="alert" className="text-sm text-destructive">{errors.program}</p>}</div>}
-                    </Form>
-                </div>
-                <p className="text-sm text-muted-foreground"><Link className="underline" href={curriculumExtractionsIndex(program)}>View all extractions</Link>{latestCurriculumExtraction && <> · Latest proposal: <Link className="underline" href={curriculumExtractionShow(latestCurriculumExtraction.id)}>{latestCurriculumExtraction.status.replaceAll('_', ' ')}</Link></>}</p>
-                {curriculumExtractionUnavailableReason && <p className="text-sm text-muted-foreground">{curriculumExtractionUnavailableReason}</p>}
-            </section>
+            <OfficialCurriculumExtraction
+                program={program}
+                enabled={curriculumExtractionEnabled}
+                unavailableReason={curriculumExtractionUnavailableReason}
+                latestExtraction={latestCurriculumExtraction}
+                models={curriculumExtractionModels}
+                defaultModel={curriculumExtractionDefaultModel}
+            />
             <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Subjects</h2>
                 <Link

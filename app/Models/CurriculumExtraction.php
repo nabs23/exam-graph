@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\CurriculumExtractionError;
 use App\CurriculumExtractionStatus;
 use Database\Factories\CurriculumExtractionFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +20,17 @@ class CurriculumExtraction extends Model
         'provider', 'model', 'prompt_version', 'proposal', 'reviewed_proposal', 'error_code', 'reviewed_at',
     ];
 
+    protected $appends = ['error_message'];
+
+    protected $hidden = ['provider_response_id', 'provider_started_at'];
+
+    protected function errorMessage(): Attribute
+    {
+        return Attribute::get(fn (): ?string => $this->error_code === null
+            ? null
+            : (CurriculumExtractionError::tryFrom($this->error_code) ?? CurriculumExtractionError::ExtractionFailed)->message());
+    }
+
     protected function casts(): array
     {
         return [
@@ -26,6 +39,7 @@ class CurriculumExtraction extends Model
             'reviewed_proposal' => 'array',
             'source_files' => 'array',
             'reviewed_at' => 'datetime',
+            'provider_started_at' => 'datetime',
         ];
     }
 

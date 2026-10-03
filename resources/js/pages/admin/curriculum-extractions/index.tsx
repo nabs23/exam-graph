@@ -5,6 +5,7 @@ import {
     show,
 } from "@/actions/App/Http/Controllers/CurriculumExtractionController";
 import { Button } from "@/components/ui/button";
+import { CurriculumExtractionForm } from "@/components/curriculum-extraction-form";
 import programs from "@/routes/programs";
 
 type SourceFile = {
@@ -22,6 +23,7 @@ type Extraction = {
     model: string;
     prompt_version: string;
     error_code: string | null;
+    error_message: string | null;
     created_at: string;
     reviewed_at: string | null;
     requester: { name: string } | null;
@@ -32,9 +34,17 @@ type Extraction = {
 export default function CurriculumExtractionsIndex({
     program,
     extractions,
+    curriculumExtractionEnabled,
+    curriculumExtractionUnavailableReason,
+    curriculumExtractionModels,
+    curriculumExtractionDefaultModel,
 }: {
     program: { id: number; name: string; code: string };
     extractions: Extraction[];
+    curriculumExtractionEnabled: boolean;
+    curriculumExtractionUnavailableReason: string | null;
+    curriculumExtractionModels: string[];
+    curriculumExtractionDefaultModel: string | null;
 }) {
     return (
         <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -51,6 +61,28 @@ export default function CurriculumExtractionsIndex({
                     {program.name}.
                 </p>
             </header>
+
+            <section className="space-y-3 rounded-xl border bg-card p-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-xl font-semibold">Official curriculum</h2>
+                        <p className="text-sm text-muted-foreground">
+                            Build one reviewer-controlled proposal from all completed program PDFs.
+                        </p>
+                    </div>
+                    <CurriculumExtractionForm
+                        program={program}
+                        enabled={curriculumExtractionEnabled}
+                        models={curriculumExtractionModels}
+                        defaultModel={curriculumExtractionDefaultModel}
+                    />
+                </div>
+                {curriculumExtractionUnavailableReason && (
+                    <p className="text-sm text-muted-foreground">
+                        {curriculumExtractionUnavailableReason}
+                    </p>
+                )}
+            </section>
 
             {extractions.length === 0 ? (
                 <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">
@@ -135,8 +167,7 @@ export default function CurriculumExtractionsIndex({
                             </div>
                             {extraction.error_code && (
                                 <p className="mt-4 text-sm text-destructive">
-                                    Error:{" "}
-                                    {extraction.error_code.replaceAll("_", " ")}
+                                    {extraction.error_message}
                                 </p>
                             )}
                             <div className="mt-4 flex flex-wrap gap-2">

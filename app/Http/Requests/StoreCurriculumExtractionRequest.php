@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Services\OfficialCurriculumExtractionService;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreCurriculumExtractionRequest extends FormRequest
 {
@@ -24,6 +26,7 @@ class StoreCurriculumExtractionRequest extends FormRequest
     {
         return [
             'confirmation' => ['accepted'],
+            'model' => ['nullable', 'string', Rule::in(app(OfficialCurriculumExtractionService::class)->availableModels())],
         ];
     }
 }

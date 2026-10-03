@@ -1,5 +1,10 @@
 <?php
 
+$minimumReservation = max(
+    max(0, (int) env('AI_OFFICIAL_CURRICULUM_TIMEOUT', 240)) + 120,
+    (int) env('AI_FILE_EMBEDDINGS_JOB_TIMEOUT', 120) + 60,
+);
+
 return [
 
     /*
@@ -40,7 +45,7 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => max($minimumReservation, (int) env('DB_QUEUE_RETRY_AFTER', 360)),
             'after_commit' => false,
         ],
 
@@ -68,7 +73,7 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => max($minimumReservation, (int) env('REDIS_QUEUE_RETRY_AFTER', 90)),
             'block_for' => null,
             'after_commit' => false,
         ],

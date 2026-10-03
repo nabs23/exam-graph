@@ -131,7 +131,7 @@ test('a changed extraction model can queue a new proposal for the same source sn
         ->and($extraction->source_hash)->toBe($sourceHash);
 });
 
-test('extraction fails safely when the provider cites a page absent from the source', function () {
+test('extraction allows review when the provider cites a page absent from the source', function () {
     $hash = str_repeat('d', 64);
     $program = Program::factory()->create();
     $file = ProgramFile::factory()->for($program)->create([
@@ -170,7 +170,8 @@ test('extraction fails safely when the provider cites a page absent from the sou
 
     app(OfficialCurriculumExtractionService::class)->extract($extraction->id);
 
-    expect($extraction->fresh()->status)->toBe(CurriculumExtractionStatus::Failed)
-        ->and($extraction->fresh()->error_code)->toBe('invalid_proposal')
-        ->and($extraction->fresh()->proposal)->toBeNull();
+    expect($extraction->fresh()->status)->toBe(CurriculumExtractionStatus::Reviewing)
+        ->and($extraction->fresh()->error_code)->toBeNull()
+        ->and($extraction->fresh()->proposal['subjects'][0]['source_file_id'])->toBeNull()
+        ->and($extraction->fresh()->proposal['subjects'][0]['source_page'])->toBeNull();
 });

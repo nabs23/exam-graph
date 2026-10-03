@@ -81,7 +81,7 @@ test('source file libraries are restricted to content managers', function () {
 });
 
 test('content managers can inspect files only without receiving storage internals', function () {
-    config(['ai.official_curriculum.enabled' => true]);
+    config(['ai.official_curriculum.enabled' => true, 'ai.file_embeddings.enabled' => false]);
     $program = Program::factory()->create();
     $file = ProgramFile::factory()->for($program)->create(['storage_key' => 'program-files/'.$program->id.'/opaque.pdf']);
 
@@ -91,7 +91,7 @@ test('content managers can inspect files only without receiving storage internal
         ->assertInertia(fn ($page) => $page->component('admin/program-files/show')
             ->where('file.id', $file->id)
             ->where('fileEmbeddingsEnabled', false)
-            ->where('embeddingUnavailableReason', 'PostgreSQL with pgvector is required.')
+            ->where('embeddingUnavailableReason', 'Embedding generation is disabled in the application configuration.')
             ->missing('file.storage_key')
             ->missing('file.storage_disk'));
 });

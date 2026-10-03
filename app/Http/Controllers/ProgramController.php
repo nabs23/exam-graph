@@ -49,6 +49,8 @@ class ProgramController extends Controller
             'program' => $program,
             'curriculumExtractionEnabled' => $unavailableReason === null,
             'curriculumExtractionUnavailableReason' => $unavailableReason,
+            'curriculumExtractionModels' => $curriculumExtractionService->availableModels(),
+            'curriculumExtractionDefaultModel' => config('ai.official_curriculum.model'),
             'latestCurriculumExtraction' => $program->curriculumExtractions()->latest()->first(['id', 'program_id', 'status']),
         ]);
     }

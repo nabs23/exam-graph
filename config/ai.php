@@ -61,14 +61,18 @@ return [
         'enabled' => (bool) env('AI_OFFICIAL_CURRICULUM_EXTRACTION_ENABLED', false),
         'provider' => env('AI_OFFICIAL_CURRICULUM_PROVIDER', 'openai'),
         'model' => env('AI_OFFICIAL_CURRICULUM_MODEL'),
-        'timeout' => (int) env('AI_OFFICIAL_CURRICULUM_TIMEOUT', 60),
+        'models' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('AI_OFFICIAL_CURRICULUM_MODELS', '')),
+        ))),
+        'timeout' => (int) env('AI_OFFICIAL_CURRICULUM_TIMEOUT', 240),
+        'reasoning_effort' => env('AI_OFFICIAL_CURRICULUM_REASONING_EFFORT', 'low'),
         'max_characters' => (int) env('AI_OFFICIAL_CURRICULUM_MAX_CHARACTERS', 120000),
         'job_tries' => (int) env('AI_OFFICIAL_CURRICULUM_JOB_TRIES', 2),
         'job_backoff' => [
             (int) env('AI_OFFICIAL_CURRICULUM_JOB_INITIAL_BACKOFF', 15),
             (int) env('AI_OFFICIAL_CURRICULUM_JOB_SECOND_BACKOFF', 45),
         ],
-        'job_timeout' => (int) env('AI_OFFICIAL_CURRICULUM_JOB_TIMEOUT', 120),
     ],
 
     /*

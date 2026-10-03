@@ -15,10 +15,16 @@ use Inertia\Response;
 
 class CurriculumExtractionController extends Controller
 {
-    public function index(Program $program): Response
+    public function index(Program $program, OfficialCurriculumExtractionService $service): Response
     {
+        $unavailableReason = $service->unavailableReason();
+
         return Inertia::render('admin/curriculum-extractions/index', [
             'program' => $program->only(['id', 'name', 'code']),
+            'curriculumExtractionEnabled' => $unavailableReason === null,
+            'curriculumExtractionUnavailableReason' => $unavailableReason,
+            'curriculumExtractionModels' => $service->availableModels(),
+            'curriculumExtractionDefaultModel' => config('ai.official_curriculum.model'),
             'extractions' => $program->curriculumExtractions()
                 ->with(['requester:id,name', 'reviewer:id,name'])
                 ->latest()
@@ -35,6 +41,7 @@ class CurriculumExtractionController extends Controller
                     'model' => $extraction->model,
                     'prompt_version' => $extraction->prompt_version,
                     'error_code' => $extraction->error_code,
+                    'error_message' => $extraction->error_message,
                     'created_at' => $extraction->created_at,
                     'reviewed_at' => $extraction->reviewed_at,
                     'requester' => $extraction->requester?->only(['name']),
@@ -50,7 +57,10 @@ class CurriculumExtractionController extends Controller
         OfficialCurriculumExtractionService $service,
     ): RedirectResponse {
         abort_unless($service->isAvailable(), 404);
-        $extraction = $service->queue($program, $request->user());
+        $model = $request->validated('model');
+        $extraction = $model === null
+            ? $service->queue($program, $request->user())
+            : $service->queue($program, $request->user(), $model);
 
         return to_route('curriculum-extractions.show', $extraction);
     }
@@ -81,6 +91,26 @@ class CurriculumExtractionController extends Controller
             'proposal' => $curriculumExtraction->proposal,
             'reviewedProposal' => $curriculumExtraction->reviewed_proposal,
             'sourcePages' => $pages,
+            'existingSubjects' => $curriculumExtraction->program->subjects()
+                ->with('syllabusTopics:id,subject_id,parent_id,code,title')
+                ->withCount(['concepts', 'files'])
+                ->orderBy('id')
+                ->get(['id', 'program_id', 'name', 'code', 'description', 'sort_order'])
+                ->map(fn ($subject): array => [
+                    'id' => $subject->id,
+                    'name' => $subject->name,
+                    'code' => $subject->code,
+                    'description' => $subject->description,
+                    'concepts_count' => $subject->concepts_count,
+                    'files_count' => $subject->files_count,
+                    'topics' => $subject->syllabusTopics->map(fn ($topic): array => [
+                        'id' => $topic->id,
+                        'parent_id' => $topic->parent_id,
+                        'code' => $topic->code,
+                        'title' => $topic->title,
+                        'description' => $topic->description,
+                    ]),
+                ]),
             'canReview' => $curriculumExtraction->status === CurriculumExtractionStatus::Reviewing,
         ]);
     }

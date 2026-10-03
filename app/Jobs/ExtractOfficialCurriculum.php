@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\CurriculumExtractionError;
 use App\Models\CurriculumExtraction;
 use App\Services\OfficialCurriculumExtractionService;
 use Illuminate\Bus\Queueable;
@@ -32,7 +33,7 @@ class ExtractOfficialCurriculum implements ShouldQueue
             fn (int $seconds): int => min(600, max(1, $seconds)),
             config('ai.official_curriculum.job_backoff', [15, 45]),
         );
-        $this->timeout = min(300, max(1, (int) config('ai.official_curriculum.job_timeout', 120)));
+        $this->timeout = max(0, (int) config('ai.official_curriculum.timeout', 240)) + 60;
     }
 
     public function handle(OfficialCurriculumExtractionService $service): void
@@ -45,6 +46,6 @@ class ExtractOfficialCurriculum implements ShouldQueue
         CurriculumExtraction::query()
             ->whereKey($this->extractionId)
             ->whereIn('status', ['queued', 'processing'])
-            ->update(['status' => 'failed', 'error_code' => 'provider_failed', 'updated_at' => now()]);
+            ->update(['status' => 'failed', 'error_code' => CurriculumExtractionError::fromException($exception)->value, 'updated_at' => now()]);
     }
 }
