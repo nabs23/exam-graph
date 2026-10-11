@@ -486,6 +486,7 @@ class OfficialCurriculumExtractionService
         $topics = SyllabusTopic::query()->whereIn('subject_id', $ids)->orderBy('id')->lockForUpdate()->get();
         $concepts = Concept::query()->whereIn('subject_id', $ids)->lockForUpdate()->get();
         $files = SubjectFile::query()->whereIn('subject_id', $ids)->lockForUpdate()->get();
+        $programFiles = ProgramFile::query()->whereIn('subject_id', $ids)->lockForUpdate()->get();
         $conceptCodes = $concepts->pluck('code')->map(fn (string $code): string => mb_strtolower(trim($code)));
         if ($conceptCodes->count() !== $conceptCodes->unique()->count()) {
             throw ValidationException::withMessages(['subjects' => 'The selected subjects contain concepts with conflicting codes. Resolve those records before merging.']);
@@ -495,6 +496,7 @@ class OfficialCurriculumExtractionService
             'syllabus_topics' => $topics->map->getAttributes(),
             'concepts' => $concepts->map->getAttributes(),
             'subject_files' => $files->map->getAttributes(),
+            'program_files' => $programFiles->map->getAttributes(),
         ];
 
         $targetTopics = $topics->where('subject_id', $targetId)->values();
@@ -544,6 +546,7 @@ class OfficialCurriculumExtractionService
             ]);
         }
         SubjectFile::query()->whereIn('subject_id', $sourceIds)->update(['subject_id' => $targetId]);
+        ProgramFile::query()->whereIn('subject_id', $sourceIds)->update(['subject_id' => $targetId]);
         SyllabusTopic::query()->whereKey($removedTopicIds)->delete();
         Subject::query()->whereKey($sourceIds)->delete();
         $target->update([

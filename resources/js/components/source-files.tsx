@@ -12,6 +12,8 @@ export type SourceFile = {
     id: number;
     title: string;
     file_type?: string;
+    subject_id?: number | null;
+    subject?: { id: number; name: string } | null;
     original_filename: string;
     mime_type: string | null;
     file_size: number | null;
@@ -43,13 +45,15 @@ export function useFileEmbeddingPolling(active: boolean, only: string[]) {
 
 export function SourceFiles({
     ownerId,
-    kind,
+    subjectId,
     files,
+    subjects,
     pollingOnly = ["files"],
 }: {
     ownerId: number;
-    kind: "program" | "subject";
+    subjectId?: number;
     files: SourceFile[];
+    subjects?: { id: number; name: string }[];
     pollingOnly?: string[];
 }) {
     useFileEmbeddingPolling(
@@ -66,14 +70,14 @@ export function SourceFiles({
                 <div>
                     <h2 className="text-xl font-semibold tracking-tight">Files</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Manage private source materials for this {kind}.
+                        Manage private source materials for this {subjectId ? "subject" : "program"}.
                     </p>
                 </div>
                 <span className="text-sm text-muted-foreground">
                     {files.length} {files.length === 1 ? "file" : "files"}
                 </span>
             </div>
-            <SourceFileUploadForm ownerId={ownerId} kind={kind} />
+            <SourceFileUploadForm ownerId={ownerId} subjectId={subjectId} subjects={subjects} />
 
             {files.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center bg-muted/20">
@@ -85,7 +89,7 @@ export function SourceFiles({
                     </p>
                 </div>
             ) : (
-                <SourceFileList files={files} kind={kind} />
+                <SourceFileList files={files} />
             )}
         </section>
     );

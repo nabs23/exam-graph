@@ -7,12 +7,17 @@ use App\FileUploadStatus;
 use App\Http\Requests\StoreProgramFileUploadRequest;
 use App\Http\Requests\UpdateProgramFileRequest;
 use App\Jobs\DeleteProgramFile;
+use App\Models\CurriculumExtraction;
+use App\Models\CurriculumGeneration;
 use App\Models\Program;
 use App\Models\ProgramFile;
+use App\Models\Subject;
+use App\Models\SubjectTopicExtraction;
 use App\Services\FileEmbeddingService;
 use App\Services\SourceFileStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -22,9 +27,24 @@ use Inertia\Response;
 
 class ProgramFileController extends Controller
 {
-    public function index(Program $program): Response
+    public function index(Request $request, Program $program): Response
     {
-        return Inertia::render('admin/program-files/index', ['program' => $program, 'files' => $program->files()->with('uploader:id,name')->latest()->get()]);
+        $filter = (string) $request->query('subject', 'all');
+        abort_unless($filter === 'all' || $filter === 'shared' || (ctype_digit($filter) && $program->subjects()->whereKey((int) $filter)->exists()), 404);
+
+        $files = $program->files()->with(['uploader:id,name', 'subject:id,name'])->latest();
+        if ($filter === 'shared') {
+            $files->whereNull('subject_id');
+        } elseif ($filter !== 'all') {
+            $files->where('subject_id', (int) $filter);
+        }
+
+        return Inertia::render('admin/program-files/index', [
+            'program' => $program,
+            'files' => $files->get(),
+            'subjects' => $program->subjects()->orderBy('name')->get(['id', 'name']),
+            'subjectFilter' => $filter,
+        ]);
     }
 
     public function uploadUrl(StoreProgramFileUploadRequest $request, Program $program, SourceFileStorage $storage): JsonResponse
@@ -33,6 +53,7 @@ class ProgramFileController extends Controller
         $data = $request->validated();
         $key = $storage->createKey('program-files', (string) $program->id, $data['extension']);
         $file = $program->files()->create([
+            'subject_id' => $data['subject_id'] ?? null, 'file_type' => $data['file_type'],
             'title' => $data['title'], 'original_filename' => basename($data['original_filename']),
             'storage_key' => $key, 'mime_type' => $data['mime_type'], 'file_size' => $data['file_size'], 'metadata' => $data['metadata'] ?? [],
             'uploaded_by' => $request->user()->id,
@@ -108,7 +129,8 @@ class ProgramFileController extends Controller
         }
 
         return Inertia::render('admin/program-files/show', [
-            'file' => $programFile->load('uploader:id,name', 'program:id,name,code')->makeHidden(['storage_key', 'storage_disk']),
+            'file' => $programFile->load('uploader:id,name', 'program:id,name,code', 'subject:id,name')->makeHidden(['storage_key', 'storage_disk']),
+            'subjects' => Subject::query()->where('program_id', $programFile->program_id)->orderBy('name')->get(['id', 'name']),
             'fileEmbeddingsEnabled' => $embeddingsAvailable,
             'embeddingUnavailableReason' => $embeddingUnavailableReason,
             'embeddingPreviews' => $embeddingPreviews,
@@ -144,10 +166,69 @@ class ProgramFileController extends Controller
 
     public function destroy(ProgramFile $programFile): RedirectResponse
     {
-        abort_unless(in_array($programFile->upload_status, [FileUploadStatus::Uploaded, FileUploadStatus::Failed, FileUploadStatus::DeletePending], true), 409);
-        $programFile->forceFill(['upload_status' => FileUploadStatus::DeletePending])->save();
-        DeleteProgramFile::dispatch($programFile->id);
+        DB::transaction(function () use ($programFile): void {
+            $lockedFile = ProgramFile::query()->lockForUpdate()->findOrFail($programFile->id);
+            abort_unless(in_array($lockedFile->upload_status, [FileUploadStatus::Uploaded, FileUploadStatus::Failed, FileUploadStatus::DeletePending], true), 409);
+            abort_if($this->hasHistoricalReferences($lockedFile), 422, 'This source file is used by an extraction or curriculum citation and cannot be deleted.');
+
+            $lockedFile->forceFill(['upload_status' => FileUploadStatus::DeletePending])->save();
+            DeleteProgramFile::dispatch($lockedFile->id)->afterCommit();
+        });
 
         return to_route('programs.files.index', $programFile->program_id);
+    }
+
+    private function hasHistoricalReferences(ProgramFile $programFile): bool
+    {
+        if (CurriculumExtraction::query()->where('program_file_id', $programFile->id)->exists()
+            || CurriculumGeneration::query()
+                ->where('program_id', $programFile->program_id)
+                ->whereJsonContains('source_files', [['id' => $programFile->id]])
+                ->exists()
+            || DB::table('syllabus_topic_sources')->where('program_file_id', $programFile->id)->exists()) {
+            return true;
+        }
+
+        if (CurriculumExtraction::query()
+            ->where('program_id', $programFile->program_id)
+            ->whereJsonContains('source_files', [['id' => $programFile->id]])
+            ->exists()) {
+            return true;
+        }
+
+        $legacyFileIds = DB::table('legacy_program_file_sources')
+            ->where('program_file_id', $programFile->id)
+            ->where('legacy_type', 'subject_file')
+            ->pluck('legacy_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+        $candidateSourceIds = array_values(array_unique([$programFile->id, ...$legacyFileIds]));
+        $historicalExtractions = SubjectTopicExtraction::query()
+            ->whereHas('subject', fn ($query) => $query->where('program_id', $programFile->program_id))
+            ->where(function ($query) use ($candidateSourceIds): void {
+                foreach ($candidateSourceIds as $index => $sourceId) {
+                    if ($index === 0) {
+                        $query->whereJsonContains('source_files', [['id' => $sourceId]]);
+                    } else {
+                        $query->orWhereJsonContains('source_files', [['id' => $sourceId]]);
+                    }
+                }
+            })
+            ->get(['source_files']);
+
+        foreach ($historicalExtractions as $extraction) {
+            foreach ($extraction->source_files ?? [] as $source) {
+                $sourceId = (int) ($source['id'] ?? 0);
+                if (($source['source_type'] ?? null) === 'program_file' && $sourceId === $programFile->id) {
+                    return true;
+                }
+
+                if (($source['source_type'] ?? null) !== 'program_file' && in_array($sourceId, $legacyFileIds, true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

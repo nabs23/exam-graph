@@ -1,26 +1,20 @@
 import { Form, Link } from "@inertiajs/react";
 import programFiles from "@/routes/program-files";
-import subjectFiles from "@/routes/subject-files";
 import { Button } from "@/components/ui/button";
 import type { SourceFile } from "@/components/source-files";
 
-type SourceFileKind = "program" | "subject";
-
 export function SourceFileDeleteButton({
     file,
-    kind,
 }: {
     file: SourceFile;
-    kind: SourceFileKind;
 }) {
-    const fileRoutes = kind === "program" ? programFiles : subjectFiles;
     const canDelete = ["uploaded", "failed", "delete_pending"].includes(
         file.upload_status,
     );
 
     return (
         <Form
-            {...fileRoutes.destroy.form(file.id)}
+            {...programFiles.destroy.form(file.id)}
             onBefore={() =>
                 window.confirm(
                     `Delete ${file.title}? This also deletes its extracted text and embedding vectors.`,
@@ -48,12 +42,9 @@ export function SourceFileDeleteButton({
 
 export function SourceFileList({
     files,
-    kind,
 }: {
     files: SourceFile[];
-    kind: SourceFileKind;
 }) {
-    const fileRoutes = kind === "program" ? programFiles : subjectFiles;
 
     return (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -63,7 +54,7 @@ export function SourceFileList({
                     className="flex min-w-0 flex-col rounded-xl border bg-card shadow-sm"
                 >
                     <Link
-                        href={fileRoutes.show(file.id)}
+                        href={programFiles.show(file.id)}
                         className="block flex-1 rounded-t-xl p-5 transition-colors hover:bg-accent"
                     >
                         <div className="flex items-start justify-between gap-3">
@@ -81,10 +72,12 @@ export function SourceFileList({
                                 </dt>
                                 <dd className="capitalize">
                                     {file.file_type?.replaceAll("_", " ") ??
-                                        (kind === "program"
-                                            ? "Program file"
-                                            : "Subject file")}
+                                        "Program file"}
                                 </dd>
+                            </div>
+                            <div>
+                                <dt className="text-xs text-muted-foreground">Subject scope</dt>
+                                <dd>{file.subject?.name ?? "Shared across program"}</dd>
                             </div>
                             <div>
                                 <dt className="text-xs text-muted-foreground">
@@ -145,7 +138,7 @@ export function SourceFileList({
                                 type="button"
                                 onClick={async () => {
                                     const result = await fetch(
-                                        fileRoutes.download(file.id).url,
+                                        programFiles.download(file.id).url,
                                         {
                                             method: "POST",
                                             headers: {
@@ -164,7 +157,7 @@ export function SourceFileList({
                                 Download
                             </button>
                         )}
-                        <SourceFileDeleteButton file={file} kind={kind} />
+                        <SourceFileDeleteButton file={file} />
                     </div>
                 </li>
             ))}

@@ -47,25 +47,15 @@ test('content managers can queue embeddings for a program PDF', function () {
     Queue::assertNothingPushed();
 });
 
-test('content managers can queue embeddings for a subject PDF', function () {
-    config(['ai.file_embeddings.enabled' => true]);
-    Queue::fake([EmbedSourceFile::class]);
-
+test('legacy subject file embedding endpoint is retired', function () {
     $subject = Subject::factory()->create();
     $file = SubjectFile::factory()->for($subject)->create([
         'storage_key' => 'subject-files/'.$subject->id.'/source.pdf',
     ]);
 
-    $this->mock(FileEmbeddingService::class, function (MockInterface $service) use ($file): void {
-        $service->shouldReceive('isAvailable')->once()->andReturnTrue();
-        $service->shouldReceive('queue')->once()->withArgs(fn (SubjectFile $queuedFile): bool => $queuedFile->is($file));
-    });
-
     $this->actingAs(User::factory()->admin()->create())
-        ->post(route('subject-files.embeddings.store', $file))
-        ->assertRedirect();
-
-    Queue::assertNothingPushed();
+        ->post('/subject-files/'.$file->id.'/embeddings')
+        ->assertNotFound();
 });
 
 test('embedding requests are hidden while file embeddings are disabled', function () {
@@ -86,26 +76,14 @@ test('embedding requests are hidden while file embeddings are disabled', functio
     Queue::assertNothingPushed();
 });
 
-test('content managers can request embedding assessment for a non-PDF source file', function () {
-    config(['ai.file_embeddings.enabled' => true]);
-    Queue::fake([EmbedSourceFile::class]);
-    Embeddings::fake();
-
+test('legacy subject file embedding assessment endpoint is retired', function () {
     $file = SubjectFile::factory()->create([
         'mime_type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ]);
 
-    $this->mock(FileEmbeddingService::class, function (MockInterface $service) use ($file): void {
-        $service->shouldReceive('isAvailable')->once()->andReturnTrue();
-        $service->shouldReceive('queue')->once()->withArgs(fn (SubjectFile $queuedFile): bool => $queuedFile->is($file));
-    });
-
     $this->actingAs(User::factory()->admin()->create())
-        ->post(route('subject-files.embeddings.store', $file))
-        ->assertRedirect();
-
-    Queue::assertNothingPushed();
-    Embeddings::assertNothingGenerated();
+        ->post('/subject-files/'.$file->id.'/embeddings')
+        ->assertNotFound();
 });
 
 test('only PDFs are supported for text embedding', function () {

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ConceptController;
 use App\Http\Controllers\CurriculumExtractionController;
+use App\Http\Controllers\CurriculumGenerationController;
 use App\Http\Controllers\LearningObjectiveController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\ProgramController;
@@ -12,7 +13,6 @@ use App\Http\Controllers\QuizAttemptController;
 use App\Http\Controllers\QuizController;
 use App\Http\Controllers\StudyController;
 use App\Http\Controllers\SubjectController;
-use App\Http\Controllers\SubjectFileController;
 use App\Http\Controllers\SubjectTopicExtractionController;
 use App\Http\Controllers\SyllabusTopicController;
 use Illuminate\Support\Facades\Route;
@@ -47,17 +47,17 @@ Route::middleware(['auth', 'verified', 'can:manage-content'])->group(function ()
     Route::get('curriculum-extractions/{curriculumExtraction}', [CurriculumExtractionController::class, 'show'])->name('curriculum-extractions.show');
     Route::post('curriculum-extractions/{curriculumExtraction}/publish', [CurriculumExtractionController::class, 'publish'])->name('curriculum-extractions.publish');
     Route::post('curriculum-extractions/{curriculumExtraction}/reject', [CurriculumExtractionController::class, 'reject'])->name('curriculum-extractions.reject');
-    Route::get('subjects/{subject}/files', [SubjectFileController::class, 'index'])->name('subjects.files.index');
-    Route::post('subjects/{subject}/files/uploads', [SubjectFileController::class, 'uploadUrl'])->middleware('throttle:10,1')->name('subjects.files.upload-url');
-    Route::post('subject-files/{subjectFile}', [SubjectFileController::class, 'store'])->middleware('throttle:10,1')->name('subject-files.store');
-    Route::get('subject-files/{subjectFile}', [SubjectFileController::class, 'show'])->name('subject-files.show');
-    Route::patch('subject-files/{subjectFile}', [SubjectFileController::class, 'update'])->name('subject-files.update');
-    Route::delete('subject-files/{subjectFile}', [SubjectFileController::class, 'destroy'])->name('subject-files.destroy');
-    Route::post('subject-files/{subjectFile}/download', [SubjectFileController::class, 'download'])->name('subject-files.download');
-    Route::post('subject-files/{subjectFile}/embeddings', [SubjectFileController::class, 'embed'])->middleware('throttle:5,1')->name('subject-files.embeddings.store');
     Route::resource('concepts', ConceptController::class)->only(['index', 'create', 'store']);
     Route::get('topics', [SyllabusTopicController::class, 'index'])->name('topics.index');
     Route::prefix('programs/{program}')->scopeBindings()->group(function (): void {
+        Route::resource('curriculum-generations', CurriculumGenerationController::class)->only(['index', 'create', 'store', 'show'])->names([
+            'index' => 'programs.curriculum-generations.index',
+            'create' => 'programs.curriculum-generations.create',
+            'store' => 'programs.curriculum-generations.store',
+            'show' => 'programs.curriculum-generations.show',
+        ])->parameters(['curriculum-generations' => 'curriculumGeneration']);
+        Route::post('curriculum-generations/{curriculumGeneration}/review', [CurriculumGenerationController::class, 'review'])
+            ->name('programs.curriculum-generations.review');
         Route::resource('subjects', SubjectController::class)->only(['index', 'create', 'store'])->names(['index' => 'programs.subjects.index', 'create' => 'programs.subjects.create', 'store' => 'programs.subjects.store']);
         Route::resource('subjects', SubjectController::class)->except(['index', 'create', 'store']);
         Route::prefix('subjects/{subject}')->group(function (): void {

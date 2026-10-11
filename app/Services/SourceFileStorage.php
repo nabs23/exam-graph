@@ -5,6 +5,7 @@ namespace App\Services;
 use App\FileUploadStatus;
 use App\Models\ProgramFile;
 use App\Models\SubjectFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -30,9 +31,16 @@ class SourceFileStorage
 
     public function delete(ProgramFile|SubjectFile $file): void
     {
+        $hasOtherOwner = $file instanceof ProgramFile
+            ? SubjectFile::query()->where('storage_disk', $file->storage_disk)->where('storage_key', $file->storage_key)->exists()
+            : ProgramFile::query()->where('storage_disk', $file->storage_disk)->where('storage_key', $file->storage_key)->exists();
+        $hasLegacyReference = DB::table('legacy_program_file_sources')
+            ->where('storage_disk', $file->storage_disk)
+            ->where('storage_key', $file->storage_key)
+            ->exists();
         $disk = Storage::disk($file->storage_disk);
 
-        if ($disk->exists($file->storage_key) && ! $disk->delete($file->storage_key)) {
+        if (! $hasOtherOwner && ! $hasLegacyReference && $disk->exists($file->storage_key) && ! $disk->delete($file->storage_key)) {
             throw new RuntimeException('The source file object could not be deleted.');
         }
 

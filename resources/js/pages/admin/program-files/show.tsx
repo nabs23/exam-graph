@@ -14,8 +14,10 @@ export default function ProgramFileShow({
     embeddingPreviews,
     embeddingDataBytes,
     embeddingPageCount,
+    subjects,
 }: {
-    file: SourceFile & { program: { id: number; name: string; code: string } };
+    file: SourceFile & { program: { id: number; name: string; code: string }; subject_id?: number | null };
+    subjects: { id: number; name: string }[];
     fileEmbeddingsEnabled: boolean;
     embeddingUnavailableReason: string | null;
     embeddingPreviews: { page_number: number; model: string; dimensions: number; excerpt: string; values: number[] }[];
@@ -52,7 +54,7 @@ export default function ProgramFileShow({
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <SourceFileDeleteButton file={file} kind="program" />
+                    <SourceFileDeleteButton file={file} />
                     <Link
                         href={programUploads.index(file.program)}
                         className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent"
@@ -107,6 +109,24 @@ export default function ProgramFileShow({
                     <dd className="mt-1 font-medium">{file.uploader?.name ?? 'Unknown'}</dd>
                 </div>
             </dl>
+
+            <Form {...programFiles.update.form(file.id)} className="flex flex-wrap items-end gap-4 rounded-xl border bg-card p-5 shadow-sm">
+                <label className="min-w-48 flex-1 text-sm font-medium">
+                    <span className="mb-1.5 block">File type</span>
+                    <select name="file_type" defaultValue={file.file_type ?? "other"} className="block w-full rounded-lg border-input bg-background px-3 py-2 text-sm shadow-sm">
+                        {["reviewer_ebook", "reviewer_notes", "lecture_material", "official_reference", "practice_material", "other"].map((type) => <option key={type} value={type}>{type.replaceAll("_", " ")}</option>)}
+                    </select>
+                </label>
+                <label className="min-w-48 flex-1 text-sm font-medium">
+                    <span className="mb-1.5 block">Subject scope</span>
+                    <select name="subject_id" defaultValue={file.subject_id?.toString() ?? ""} className="block w-full rounded-lg border-input bg-background px-3 py-2 text-sm shadow-sm">
+                        <option value="">Shared across program</option>
+                        {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+                    </select>
+                </label>
+                <input type="hidden" name="title" value={file.title} />
+                <Button type="submit" variant="outline">Save file classification</Button>
+            </Form>
 
             <section className="space-y-4 rounded-xl border bg-card p-5 shadow-sm">
                 <div>

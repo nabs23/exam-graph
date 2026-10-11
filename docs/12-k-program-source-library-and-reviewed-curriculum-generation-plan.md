@@ -2,7 +2,7 @@
 
 ## Status and relationship to existing plans
 
-**Status: proposed implementation plan; implementation has not started.** This plan changes the source-file ownership model and defines a reviewer-controlled workflow for drafting subjects, syllabus topics, and concepts from program files. Program files become the sole supported source-file product surface. Each program file may optionally be associated with one subject.
+**Status: implementation complete.** Phases 1–4 acceptance checks are complete. Phase 2 retired the subject-file product surface while preserving the legacy model and table for archive compatibility. This plan changes the source-file ownership model and defines a reviewer-controlled workflow for drafting subjects, syllabus topics, and concepts from program files. Program files become the sole supported source-file product surface. Each program file may optionally be associated with one subject.
 
 This plan relaxes the earlier requirement to reproduce the PRC syllabus exactly. The PRC syllabus remains a useful reference source, but generated subjects, topics, and concepts are author proposals. An authorized author decides what becomes canonical curriculum. Citations are optional supporting metadata and are not a generation or publication gate. This does not claim PRC compliance or source verification.
 
@@ -60,6 +60,7 @@ Keep draft proposals separate from canonical `subjects`, `syllabus_topics`, and 
 
 - Update `ProgramFile` relationships to expose its program and optional subject; expose subject-associated and shared files to the author in the correct scope.
 - Keep source files private and preserve current upload, download, update, delete, page-text, and embedding behavior for program files.
+- Preserve historical extraction pages and citations when managing files; a program file with historical extraction or citation references cannot be deleted because deleting it would cascade its page text.
 - Change extraction/source selection queries to use program files and their optional subject association.
 - Move or reconcile page text and `file_page_embeddings` rows while preserving original file/page identity. The embedding vector is not a substitute for readable page text or citation verification.
 - Remove subject-file routes and UI after migration and compatibility acceptance. Do not retire program-file management or the old program-wide extraction workflow.
@@ -76,38 +77,62 @@ Keep draft proposals separate from canonical `subjects`, `syllabus_topics`, and 
 
 ### Phase 0 — Inventory and migration design
 
-- [ ] Inventory existing program and subject files, storage objects, page text, vectors, extraction snapshots, and published topic citations.
-- [ ] Choose and document the old-to-new ID and archive compatibility strategy before changing foreign keys or removing models.
-- [ ] Confirm every existing program-file type maps to one of the `SubjectFileType` enum values; map official syllabus and board-resolution values to `official_reference`.
-- [ ] Check: every existing subject-file source and downstream reference has a defined migration, retention, or archive outcome.
+- [x] Inventory existing program and subject files, storage objects, page text, vectors, extraction snapshots, and published topic citations.
+- [x] Choose and document the old-to-new ID and archive compatibility strategy before changing foreign keys or removing models.
+- [x] Confirm every existing program-file type maps to one of the `SubjectFileType` enum values; map official syllabus and board-resolution values to `official_reference`.
+- [x] Check: every existing subject-file source and downstream reference has a defined migration, retention, or archive outcome.
+
+#### Inventory and migration decision — 2026-10-11
+
+Read-only inspection of the configured PostgreSQL database found one program file (`program_files.id=2`) and two subject files (`subject_files.id=2,3`). All three S3 objects exist. The program file and subject file 3 have the same SHA-256 (`d11428585fc47e456fe5b63ab089f9799719735ff1f4aac2b243a50dac42048b`) but are separate S3 objects. Each has 68 page-text/vector rows; all 68 page texts and vectors match exactly, while their `source_key` values differ. The program file remains the canonical shared file so the existing program-wide source remains available without a duplicate listing.
+
+Subject file 2 (`Accounting_Succinctly.pdf`) belongs to subject 2, has `reviewer_ebook` type, no content hash, no page text/vector rows, and no extraction or topic-citation references. Migrate it to a new program-file row associated with subject 2, retaining its existing private object, metadata, and current upload/embedding states. Do not claim it has usable text or vectors.
+
+Subject file 3 (`Specs`) belongs to subject 1 and is the same official PRC 2022 syllabus as program file 2. It currently has `other` type, but its verified filename/content identify it as an official syllabus; classify the canonical program file as `official_reference`. Keep program file 2 shared (`subject_id = null`) to preserve its program-wide scope. Map legacy subject-file ID 3 to program-file ID 2. Do not copy or delete the duplicate S3 object during row migration; retain its private disk/key in the legacy-source mapping so historical records and later retention work can resolve it.
+
+`program_files` currently has no `file_type` or `subject_id` column; an earlier migration removed its `file_type`. The single existing program-file type therefore has no stored value to translate. Restore `file_type` using the existing `SubjectFileType` enum, classify the PRC syllabus as `official_reference` only by its verified content hash, and leave other unclassified program files as `other`. Preserve the subject file 2 type as `reviewer_ebook` when creating its program-file row.
+
+There are 68 program-file page rows and 68 matching subject-file page rows for the duplicate syllabus. Keep the program-file rows as canonical. The legacy ID map must let archive reads for subject file 3 resolve page text/vectors through program file 2 using the unchanged source hash and original page numbers; do not retain a second active embedding set. `file_page_embeddings.subject_file_id` currently cascades on subject-file deletion, and `syllabus_topic_sources.subject_file_id` currently becomes null. Migrate those references through the ID map before retiring either table; do not let the current delete rules erase vectors or live citation links during the transition. Program-wide extractions 4, 10, and 11 have null `program_file_id` values but their immutable `source_files` snapshots identify program file 2, so keep those snapshots unchanged. Subject extraction 3 snapshots subject file 3 and has no published topic citations; preserve that record verbatim and resolve its source through the legacy ID map. `syllabus_topic_sources` is empty, so there are no existing published citation rows to rewrite. Any citations created before retirement must carry the legacy source ID snapshot and resolve their live program-file reference through the same mapping. No extraction records or S3 objects are deleted as part of this migration.
+
+The map must be durable and keyed by legacy source kind and ID, with a nullable program-file foreign key and retained legacy title, type, content hash, storage disk/key, and metadata needed for archive reads. Source reconciliation must be idempotent: the existing program file is reused for subject file 3 by verified hash and identical page content/vector, while subject file 2 receives one mapped program-file row. Before removing subject-file tables or routes, verify program-file access and historical extraction rendering through these mappings.
 
 ### Phase 1 — Unified program-file model
 
-- [ ] Add nullable `subject_id` to program files with same-program validation and relationships.
-- [ ] Migrate subject-file metadata and storage references to program files without deleting source objects; preserve/reconcile page text, vectors, and provenance.
-- [ ] Add program-file filters for shared files and subject-associated files.
-- [ ] Check: source rows, page text, embeddings, and historical provenance resolve after migration; rerunning migration/reconciliation does not duplicate files.
+- [x] Add nullable `subject_id` to program files with same-program validation and relationships.
+- [x] Migrate subject-file metadata and storage references to program files without deleting source objects; preserve/reconcile page text, vectors, and provenance.
+- [x] Add program-file filters for shared files and subject-associated files.
+- [x] Check: source rows, page text, embeddings, and historical provenance resolve after migration.
+- [x] Check: rerunning source reconciliation does not duplicate files or reset migrated file types.
+
+#### Phase 1 verification — 2026-10-11
+
+Migration `2026_10_11_054054_unify_subject_files_into_program_files` is recorded in batch 11. Direct read-only PostgreSQL inspection confirms program file 2 remains shared and classified `official_reference`, subject file 3 maps to it, and subject file 2 maps to newly created subject-scoped program file 4 classified `reviewer_ebook`. All 68 page embeddings now belong to program files; no subject-file embedding rows remain. The citation table remains empty. Program-wide extractions 1, 4, 10, and 11 and published subject extraction 3 remain present with their prior source references/snapshots. Focused tests cover legacy-to-canonical page resolution, citations, shared/subject filters, the two-legacy-ID-to-one-canonical-file case, and repeated reconciliation without duplicate rows or changed migrated types.
+
 
 ### Phase 2 — Retire subject-file product surface
 
-- [ ] Move subject page file management to the program-file interface filtered by subject association.
-- [ ] Update upload, metadata editing, download, deletion, and embedding operations to use program-file ownership.
-- [ ] Remove subject-file routes, requests, components, model use, and table only after archive compatibility and migrated workflows are verified.
-- [ ] Check: program-file CRUD works for shared and subject-associated files; subject-file URLs no longer accept new operations; historical extraction pages still resolve their source details.
+- [x] Move subject page file management to the program-file interface filtered by subject association.
+- [x] Update upload, metadata editing, download, deletion, and embedding operations to use program-file ownership.
+- [x] Remove subject-file management routes, requests, and pages. Keep `SubjectFile` and `subject_files` as an internal compatibility layer for historical subject-topic extraction snapshots, merge rollback data, and already-serialized queue payloads; retire them only after those consumers have a durable replacement and the compatibility period is closed.
+- [x] Check: program-file CRUD works for shared and subject-associated files; subject-file URLs no longer accept new operations; historical extraction pages still resolve their source details.
 
 ### Phase 3 — Author-reviewed generation
 
-- [ ] Implement structured proposal generation for subjects, topics, and concepts from explicitly selected program files.
-- [ ] Snapshot selected sources and show optional citations with verification notes; do not block a proposal or approval only because citations are missing or invalid.
-- [ ] Add item-level edit, reorder, approve, reject, and conflict handling. Approval is explicit and audit-recorded.
-- [ ] Check: generated items stay private before approval; only selected approved items enter canonical curriculum; one conflicting item does not block independent items.
+- [x] Implement structured proposal generation for subjects, topics, and concepts from explicitly selected program files. This supersedes 12-J's ungrounded subject/topic proposal scope; lesson generation remains deferred and out of scope.
+- [x] Snapshot selected sources and show optional citations with verification notes; do not block a proposal or approval only because citations are missing or invalid.
+- [x] Add item-level edit, reorder, approve, reject, and conflict handling. Approval is explicit and audit-recorded.
+- [x] Check: generated items stay private before approval; only selected approved items enter canonical curriculum; one conflicting item does not block independent items.
 
 ### Phase 4 — End-to-end acceptance
 
-- [ ] Demonstrate generation of candidate subjects from shared program files, topics from subject-associated/shared files, and concepts from selected sources.
-- [ ] Demonstrate author edits and approval for each stage, including a source with no citations and a proposal with citation notes.
-- [ ] Confirm content is labeled author-approved and not automatically labeled PRC-compliant or source-verified.
-- [ ] Confirm the legacy program-wide extraction and program-file management interfaces remain supported.
+- [x] Demonstrate generation of candidate subjects from shared program files, topics from subject-associated/shared files, and concepts from selected sources.
+- [x] Demonstrate author edits and approval for each stage, including a source with no citations and a proposal with citation notes.
+- [x] Confirm content is labeled author-approved and not automatically labeled PRC-compliant or source-verified.
+- [x] Confirm the legacy program-wide extraction and program-file management interfaces remain supported.
+
+#### Phase 4 verification — 2026-10-11
+
+The targeted acceptance run passed: `php artisan test --compact tests/Feature/CurriculumGenerationServiceTest.php tests/Feature/CurriculumGenerationControllerTest.php tests/Feature/CurriculumExtractionTest.php tests/Feature/SourceFilesTest.php` completed with 69 tests and 417 assertions. The generation tests exercise subjects, topics, concepts, citations and citation notes, author edits, approval, and persistence; the legacy feature tests cover program-wide extraction and program-file listing/management. The review screen labels approved items “Author approved” and states that approval does not certify PRC compliance or source correctness. This verifies the application workflow with a fake AI agent; no live-provider call or assessment of real generated-content quality was performed.
 
 ## Acceptance criteria
 

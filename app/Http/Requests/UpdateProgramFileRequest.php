@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\SubjectFileType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateProgramFileRequest extends FormRequest
 {
@@ -23,6 +25,8 @@ class UpdateProgramFileRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'file_type' => ['required', Rule::enum(SubjectFileType::class)],
+            'subject_id' => ['nullable', Rule::exists('subjects', 'id')->where('program_id', $this->route('programFile')->program_id)],
             'title' => ['required', 'string', 'max:255'],
             'metadata' => ['nullable', 'array'],
             'metadata.author' => ['nullable', 'string', 'max:255'],

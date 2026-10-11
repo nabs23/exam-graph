@@ -74,11 +74,7 @@ class FileEmbeddingService
             return;
         }
 
-        $expectedPrefix = $file instanceof SubjectFile
-            ? 'subject-files/'.$file->subject_id.'/'
-            : 'program-files/'.$file->program_id.'/';
-
-        if (! str_starts_with($file->storage_key, $expectedPrefix)) {
+        if (! $this->hasValidStorageOwnerPath($file)) {
             throw new RuntimeException('The source file storage key is outside its expected owner path.');
         }
 
@@ -117,11 +113,7 @@ class FileEmbeddingService
             return;
         }
 
-        $expectedPrefix = $file instanceof SubjectFile
-            ? 'subject-files/'.$file->subject_id.'/'
-            : 'program-files/'.$file->program_id.'/';
-
-        if (! str_starts_with($file->storage_key, $expectedPrefix)) {
+        if (! $this->hasValidStorageOwnerPath($file)) {
             throw new RuntimeException('The source file storage key is outside its expected owner path.');
         }
 
@@ -193,6 +185,24 @@ class FileEmbeddingService
                 throw new FileEmbeddingException('temporary_cleanup_failed', true, 'Temporary PDF cleanup failed.');
             }
         }
+    }
+
+    private function hasValidStorageOwnerPath(ProgramFile|SubjectFile $file): bool
+    {
+        $expectedPrefix = $file instanceof SubjectFile
+            ? 'subject-files/'.$file->subject_id.'/'
+            : 'program-files/'.$file->program_id.'/';
+
+        if (str_starts_with($file->storage_key, $expectedPrefix)) {
+            return true;
+        }
+
+        return $file instanceof ProgramFile && DB::table('legacy_program_file_sources')
+            ->where('legacy_type', 'subject_file')
+            ->where('program_file_id', $file->id)
+            ->where('storage_disk', $file->storage_disk)
+            ->where('storage_key', $file->storage_key)
+            ->exists();
     }
 
     /** @param array<int, string> $texts

@@ -57,6 +57,27 @@ return [
         'job_timeout' => (int) env('AI_FILE_EMBEDDINGS_JOB_TIMEOUT', 120),
     ],
 
+    'curriculum_generation' => [
+        'enabled' => (bool) env('AI_CURRICULUM_GENERATION_ENABLED', false),
+        'provider' => env('AI_CURRICULUM_GENERATION_PROVIDER', 'openai'),
+        'model' => env('AI_CURRICULUM_GENERATION_MODEL'),
+        'models' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('AI_CURRICULUM_GENERATION_MODELS', '')),
+        ))),
+        'timeout' => (int) env('AI_CURRICULUM_GENERATION_TIMEOUT', 240),
+        'reasoning_effort' => env('AI_CURRICULUM_GENERATION_REASONING_EFFORT', 'low'),
+        'max_files' => (int) env('AI_CURRICULUM_GENERATION_MAX_FILES', 10),
+        'max_pages' => (int) env('AI_CURRICULUM_GENERATION_MAX_PAGES', 300),
+        'max_characters' => (int) env('AI_CURRICULUM_GENERATION_MAX_CHARACTERS', 250000),
+        'max_items' => (int) env('AI_CURRICULUM_GENERATION_MAX_ITEMS', 200),
+        'job_tries' => (int) env('AI_CURRICULUM_GENERATION_JOB_TRIES', 2),
+        'job_backoff' => [
+            (int) env('AI_CURRICULUM_GENERATION_JOB_INITIAL_BACKOFF', 15),
+            (int) env('AI_CURRICULUM_GENERATION_JOB_SECOND_BACKOFF', 45),
+        ],
+    ],
+
     'official_curriculum' => [
         'enabled' => (bool) env('AI_OFFICIAL_CURRICULUM_EXTRACTION_ENABLED', false),
         'provider' => env('AI_OFFICIAL_CURRICULUM_PROVIDER', 'openai'),

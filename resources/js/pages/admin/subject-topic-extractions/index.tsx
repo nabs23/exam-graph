@@ -28,6 +28,7 @@ type SourceFile = {
     upload_status: string;
     embedding_status: string;
     usable_pages_count: number;
+    subject_name: string | null;
     eligible: boolean;
 };
 
@@ -80,6 +81,7 @@ export default function SubjectTopicExtractionsIndex({
                                             <input type="checkbox" name="source_file_ids[]" value={file.id} disabled={!file.eligible} className="mt-1 size-4" />
                                             <span className="min-w-0 flex-1">
                                                 <span className="block font-medium">{file.title}</span>
+                                                <span className="block text-xs text-muted-foreground">{file.subject_name ? `Associated with ${file.subject_name}` : 'Shared program file'}</span>
                                                 <span className="block text-sm text-muted-foreground">
                                                     {file.eligible ? `Ready · ${file.usable_pages_count} pages · ${file.file_type ?? 'PDF'}` : `${file.upload_status.replaceAll('_', ' ')} · ${file.embedding_status.replaceAll('_', ' ')} · ${file.usable_pages_count} usable pages`}
                                                 </span>

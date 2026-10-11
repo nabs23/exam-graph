@@ -7,6 +7,7 @@ use App\FileEmbeddingStatus;
 use App\FileUploadStatus;
 use App\Jobs\ExtractSubjectTopics;
 use App\Models\FilePageEmbedding;
+use App\Models\ProgramFile;
 use App\Models\Subject;
 use App\Models\SubjectFile;
 use App\Models\SubjectTopicExtraction;
@@ -14,6 +15,7 @@ use App\Models\User;
 use App\SubjectTopicExtractionError;
 use App\SubjectTopicExtractionStatus;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -70,10 +72,18 @@ class SubjectTopicExtractionService
         return DB::transaction(function () use ($subject, $sourceFileIds, $requester, $model): SubjectTopicExtraction {
             $lockedSubject = Subject::query()->lockForUpdate()->findOrFail($subject->id);
             $fileIds = array_values(array_unique(array_map('intval', $sourceFileIds)));
-            $files = $lockedSubject->files()->whereIn('id', $fileIds)->orderBy('id')->lockForUpdate()->get();
+            $files = ProgramFile::query()
+                ->where('program_id', $lockedSubject->program_id)
+                ->whereIn('id', $fileIds)
+                ->where(function ($query) use ($lockedSubject): void {
+                    $query->whereNull('subject_id')->orWhere('subject_id', $lockedSubject->id);
+                })
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
 
             if ($files->count() !== count($fileIds)) {
-                throw ValidationException::withMessages(['source_file_ids' => 'Select only source files attached to this subject.']);
+                throw ValidationException::withMessages(['source_file_ids' => 'Select only shared program files or files associated with this subject.']);
             }
 
             $this->assertEligibleFiles($files);
@@ -238,18 +248,20 @@ class SubjectTopicExtractionService
                     continue;
                 }
 
-                $sourceCitations = $proposal['source_pages'] ?? null;
-                if (! is_array($sourceCitations) || $sourceCitations === []) {
-                    throw ValidationException::withMessages(['topics' => 'Each included topic must cite a page from the selected source files.']);
-                }
-                foreach ($sourceCitations as $citation) {
-                    if (! is_array($citation)
-                        || ! is_int($citation['source_file_id'] ?? null)
-                        || ! is_int($citation['page_number'] ?? null)
-                        || ! isset($availableSourcePages[$citation['source_file_id'].':'.$citation['page_number']])) {
-                        throw ValidationException::withMessages(['topics' => 'Correct each topic citation to a page in the selected source files before publishing.']);
-                    }
-                }
+                $sourceCitations = is_array($proposal['source_pages'] ?? null)
+                    ? array_values($proposal['source_pages'])
+                    : [];
+                $matchedSourceCitations = array_values(array_filter($sourceCitations, fn (mixed $citation): bool => is_array($citation)
+                    && is_int($citation['source_file_id'] ?? null)
+                    && is_int($citation['page_number'] ?? null)
+                    && isset($availableSourcePages[$citation['source_file_id'].':'.$citation['page_number']])));
+                $verifiedSourceCitations = collect($matchedSourceCitations)
+                    ->unique(fn (array $citation): string => $citation['source_file_id'].':'.$citation['page_number'])
+                    ->values()
+                    ->all();
+                $citationStatus = $sourceCitations === []
+                    ? 'unverified'
+                    : (count($matchedSourceCitations) === count($sourceCitations) ? 'valid' : 'invalid');
 
                 $title = trim((string) ($selection['title'] ?? ''));
                 if ($title === '') {
@@ -263,7 +275,9 @@ class SubjectTopicExtractionService
                     'description' => $this->nullableString($selection['description'] ?? null),
                     'parent_index' => $parentIndex,
                     'sort_order' => (int) ($selection['sort_order'] ?? $index),
-                    'source_pages' => $proposal['source_pages'],
+                    'source_pages' => $sourceCitations,
+                    'verified_source_pages' => $verifiedSourceCitations,
+                    'citation_status' => $citationStatus,
                 ];
             }
 
@@ -294,13 +308,22 @@ class SubjectTopicExtractionService
                     $topic->update(['parent_id' => $created[$topicData['parent_index']]->id]);
                 }
 
-                foreach ($topicData['source_pages'] as $sourcePage) {
-                    $file = $filesById->get($sourcePage['source_file_id']);
+                foreach ($topicData['verified_source_pages'] as $sourcePage) {
+                    $sourceSnapshot = $filesById->get($sourcePage['source_file_id']);
+                    $isProgramFile = ($sourceSnapshot['source_type'] ?? null) === 'program_file';
+                    $programFileId = $isProgramFile
+                        ? $sourcePage['source_file_id']
+                        : DB::table('legacy_program_file_sources')
+                            ->where('legacy_type', 'subject_file')
+                            ->where('legacy_id', $sourcePage['source_file_id'])
+                            ->value('program_file_id');
+
                     $topic->sources()->create([
-                        'subject_file_id' => $sourcePage['source_file_id'],
+                        'subject_file_id' => $isProgramFile ? null : $sourcePage['source_file_id'],
+                        'program_file_id' => $programFileId,
                         'source_file_id_snapshot' => $sourcePage['source_file_id'],
-                        'source_title' => $file['title'],
-                        'source_hash' => $file['content_hash'],
+                        'source_title' => $sourceSnapshot['title'],
+                        'source_hash' => $sourceSnapshot['content_hash'],
                         'page_number' => $sourcePage['page_number'],
                     ]);
                 }
@@ -356,12 +379,35 @@ class SubjectTopicExtractionService
         ExtractSubjectTopics::dispatch($extraction->id)->afterCommit();
     }
 
-    /** @return Collection<int, SubjectFile> */
+    /** @return Collection<int, ProgramFile> */
     public function filesForSubject(Subject $subject): Collection
     {
-        return $subject->files()->withCount(['pageEmbeddings as usable_pages_count' => fn ($query) => $query
-            ->whereNotNull('content')
-            ->whereColumn('file_page_embeddings.source_hash', 'subject_files.content_hash')])->latest()->get();
+        $files = ProgramFile::query()
+            ->where('program_id', $subject->program_id)
+            ->where(function ($query) use ($subject): void {
+                $query->whereNull('subject_id')->orWhere('subject_id', $subject->id);
+            })
+            ->with('subject:id,name')
+            ->latest()
+            ->get();
+        if ($files->isEmpty()) {
+            return $files;
+        }
+
+        $usablePageCounts = FilePageEmbedding::query()
+            ->join('program_files', 'program_files.id', '=', 'file_page_embeddings.program_file_id')
+            ->whereIn('file_page_embeddings.program_file_id', $files->modelKeys())
+            ->whereNotNull('file_page_embeddings.content')
+            ->whereColumn('file_page_embeddings.source_hash', 'program_files.content_hash')
+            ->selectRaw('file_page_embeddings.program_file_id, count(distinct file_page_embeddings.page_number) as usable_pages_count')
+            ->groupBy('file_page_embeddings.program_file_id')
+            ->pluck('usable_pages_count', 'program_file_id');
+
+        foreach ($files as $file) {
+            $file->usable_pages_count = (int) $usablePageCounts->get($file->id, 0);
+        }
+
+        return $files;
     }
 
     private function assertReady(): void
@@ -386,29 +432,73 @@ class SubjectTopicExtractionService
         }
     }
 
-    /** @param Collection<int, SubjectFile> $files */
+    /** @param Collection<int, ProgramFile|SubjectFile> $files */
     private function assertEligibleFiles(Collection $files): void
     {
-        if ($files->isEmpty() || $files->contains(fn (SubjectFile $file): bool => $file->upload_status !== FileUploadStatus::Uploaded
+        if ($files->isEmpty() || $files->contains(fn (ProgramFile|SubjectFile $file): bool => $file->upload_status !== FileUploadStatus::Uploaded
             || $file->mime_type !== 'application/pdf'
             || $file->embedding_status !== FileEmbeddingStatus::Complete)) {
             throw ValidationException::withMessages(['source_file_ids' => 'Select only uploaded PDFs with completed page text.']);
         }
     }
 
-    /** @param Collection<int, SubjectFile> $files
-     * @return Collection<int, FilePageEmbedding>
+    /** @param Collection<int, ProgramFile|SubjectFile> $files
+     * @return SupportCollection<int, FilePageEmbedding>
      */
-    private function sourcePages(Collection $files): Collection
+    private function sourcePages(Collection $files): SupportCollection
     {
-        $sourceHashes = $files->mapWithKeys(fn (SubjectFile $file): array => [$file->id => $file->content_hash]);
+        $programFiles = $files->filter(fn (ProgramFile|SubjectFile $file): bool => $file instanceof ProgramFile)->keyBy('id');
+        $subjectFiles = $files->filter(fn (ProgramFile|SubjectFile $file): bool => $file instanceof SubjectFile)->keyBy('id');
+        $sourceHashes = $files->mapWithKeys(fn (ProgramFile|SubjectFile $file): array => [$file->id => $file->content_hash]);
+        $legacyMap = DB::table('legacy_program_file_sources')
+            ->where('legacy_type', 'subject_file')
+            ->whereIn('legacy_id', $subjectFiles->keys())
+            ->pluck('program_file_id', 'legacy_id');
+
         $pages = FilePageEmbedding::query()
-            ->whereIn('subject_file_id', $files->pluck('id'))
+            ->where(function ($query) use ($programFiles, $subjectFiles, $legacyMap): void {
+                if ($subjectFiles->isNotEmpty()) {
+                    $query->whereIn('subject_file_id', $subjectFiles->keys());
+                }
+                $programFileIds = $programFiles->keys()->merge($legacyMap->values())->unique();
+                if ($programFileIds->isNotEmpty()) {
+                    if ($subjectFiles->isNotEmpty()) {
+                        $query->orWhereIn('program_file_id', $programFileIds);
+                    } else {
+                        $query->whereIn('program_file_id', $programFileIds);
+                    }
+                }
+                if ($subjectFiles->isEmpty() && $programFiles->isEmpty()) {
+                    $query->whereRaw('1 = 0');
+                }
+            })
             ->whereNotNull('content')
-            ->orderBy('subject_file_id')
             ->orderBy('page_number')
-            ->get(['id', 'subject_file_id', 'page_number', 'source_hash', 'content'])
-            ->filter(fn (FilePageEmbedding $page): bool => $page->source_hash === $sourceHashes[$page->subject_file_id] && filled($page->content))
+            ->get(['id', 'subject_file_id', 'program_file_id', 'page_number', 'source_hash', 'content'])
+            ->flatMap(function (FilePageEmbedding $page) use ($programFiles, $subjectFiles, $legacyMap) {
+                $sourceIds = collect();
+                if ($page->subject_file_id !== null && $subjectFiles->has($page->subject_file_id)) {
+                    $sourceIds->push($page->subject_file_id);
+                }
+                if ($page->program_file_id !== null && $programFiles->has($page->program_file_id)) {
+                    $sourceIds->push($page->program_file_id);
+                }
+                $sourceIds = $sourceIds->merge($legacyMap
+                    ->filter(fn (mixed $programFileId): bool => (int) $programFileId === (int) $page->program_file_id)
+                    ->keys()
+                    ->filter(fn (int|string $legacyId): bool => $subjectFiles->has((int) $legacyId)));
+
+                return $sourceIds->unique()->map(function (int|string $sourceId) use ($page): FilePageEmbedding {
+                    $mappedPage = clone $page;
+                    $mappedPage->subject_file_id = (int) $sourceId;
+
+                    return $mappedPage;
+                });
+            })
+            ->filter(fn (FilePageEmbedding $page): bool => $page->subject_file_id !== null
+                && $sourceHashes->has($page->subject_file_id)
+                && $page->source_hash === $sourceHashes[$page->subject_file_id]
+                && filled($page->content))
             ->unique(fn (FilePageEmbedding $page): string => $page->subject_file_id.':'.$page->page_number)
             ->values();
 
@@ -421,8 +511,8 @@ class SubjectTopicExtractionService
         return $pages;
     }
 
-    /** @param Collection<int, FilePageEmbedding> $pages */
-    private function assertInputBounds(Collection $pages): void
+    /** @param SupportCollection<int, FilePageEmbedding> $pages */
+    private function assertInputBounds(SupportCollection $pages): void
     {
         $maximumPages = max(1, (int) config('ai.subject_topic_extraction.max_pages', 300));
         $maximumCharacters = min(250000, max(1000, (int) config('ai.subject_topic_extraction.max_characters', 250000)));
@@ -436,20 +526,33 @@ class SubjectTopicExtractionService
         }
     }
 
-    /** @param Collection<int, SubjectFile> $files
-     * @return array<int, array{id: int, content_hash: string, title: string, mime_type: string}>
+    /** @param Collection<int, ProgramFile|SubjectFile> $files
+     * @return array<int, array{id: int, content_hash: string, title: string, mime_type: string, source_type?: string, file_type?: string, subject_id?: int|null}>
      */
     private function sourceSnapshot(Collection $files): array
     {
-        return $files->map(fn (SubjectFile $file): array => [
-            'id' => $file->id,
-            'content_hash' => $file->content_hash,
-            'title' => $file->title,
-            'mime_type' => $file->mime_type,
-        ])->all();
+        return $files->map(function (ProgramFile|SubjectFile $file): array {
+            $snapshot = [
+                'id' => $file->id,
+                'content_hash' => $file->content_hash,
+                'title' => $file->title,
+                'mime_type' => $file->mime_type,
+            ];
+
+            if ($file instanceof ProgramFile) {
+                return [
+                    ...$snapshot,
+                    'source_type' => 'program_file',
+                    'file_type' => $file->file_type?->value,
+                    'subject_id' => $file->subject_id,
+                ];
+            }
+
+            return $snapshot;
+        })->all();
     }
 
-    /** @return Collection<int, SubjectFile> */
+    /** @return Collection<int, ProgramFile|SubjectFile> */
     private function filesForSnapshot(SubjectTopicExtraction $extraction, bool $lock = false): Collection
     {
         $snapshot = $extraction->source_files;
@@ -457,7 +560,14 @@ class SubjectTopicExtractionService
             throw new RuntimeException('The extraction source snapshot is unavailable.');
         }
 
-        $query = SubjectFile::query()->where('subject_id', $extraction->subject_id)->whereIn('id', collect($snapshot)->pluck('id'))->orderBy('id');
+        $programFileSnapshot = collect($snapshot)->every(fn (array $file): bool => ($file['source_type'] ?? null) === 'program_file');
+        $subject = Subject::query()->findOrFail($extraction->subject_id);
+        $query = $programFileSnapshot
+            ? ProgramFile::query()->where('program_id', $subject->program_id)->where(function ($query) use ($subject): void {
+                $query->whereNull('subject_id')->orWhere('subject_id', $subject->id);
+            })
+            : SubjectFile::query()->where('subject_id', $subject->id);
+        $query->whereIn('id', collect($snapshot)->pluck('id'))->orderBy('id');
         if ($lock) {
             $query->lockForUpdate();
         }
@@ -469,6 +579,11 @@ class SubjectTopicExtractionService
         return $files;
     }
 
+    public function isSnapshotCurrent(SubjectTopicExtraction $extraction): bool
+    {
+        return $this->snapshotIsCurrent($extraction);
+    }
+
     private function snapshotIsCurrent(SubjectTopicExtraction $extraction, bool $lock = false): bool
     {
         try {
@@ -478,16 +593,16 @@ class SubjectTopicExtractionService
         }
 
         return $this->sourceSnapshot($files) === $extraction->source_files
-            && $files->every(fn (SubjectFile $file): bool => $file->upload_status === FileUploadStatus::Uploaded
+            && $files->every(fn (ProgramFile|SubjectFile $file): bool => $file->upload_status === FileUploadStatus::Uploaded
                 && $file->mime_type === 'application/pdf'
                 && $file->embedding_status === FileEmbeddingStatus::Complete);
     }
 
     /** @param array<string, mixed> $raw
-     * @param  Collection<int, FilePageEmbedding>  $pages
+     * @param  SupportCollection<int, FilePageEmbedding>  $pages
      * @return array{topics: array<int, array<string, mixed>>}
      */
-    private function validateProposal(array $raw, Collection $pages): array
+    private function validateProposal(array $raw, SupportCollection $pages): array
     {
         $topics = $raw['topics'] ?? null;
         if (! is_array($topics) || count($topics) > 1000) {

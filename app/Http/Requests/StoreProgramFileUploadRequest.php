@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\SubjectFileType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -26,6 +27,8 @@ class StoreProgramFileUploadRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:255'],
+            'file_type' => ['required', Rule::enum(SubjectFileType::class)],
+            'subject_id' => ['nullable', Rule::exists('subjects', 'id')->where('program_id', $this->route('program')->id)],
             'original_filename' => ['required', 'string', 'max:255'],
             'mime_type' => ['required', Rule::in(['application/pdf', 'application/epub+zip', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])],
             'extension' => ['required', Rule::in(['pdf', 'docx', 'epub'])],

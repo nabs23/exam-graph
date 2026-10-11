@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\FileEmbeddingStatus;
 use App\FileUploadStatus;
+use App\SubjectFileType;
 use Database\Factories\ProgramFileFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +16,7 @@ class ProgramFile extends Model
     /** @use HasFactory<ProgramFileFactory> */
     use HasFactory;
 
-    protected $fillable = ['title', 'original_filename', 'storage_key', 'mime_type', 'file_size', 'uploaded_by', 'metadata'];
+    protected $fillable = ['subject_id', 'file_type', 'title', 'original_filename', 'storage_key', 'mime_type', 'file_size', 'uploaded_by', 'metadata'];
 
     protected $hidden = ['storage_key', 'storage_disk'];
 
@@ -23,6 +24,7 @@ class ProgramFile extends Model
     {
         return [
             'upload_status' => FileUploadStatus::class,
+            'file_type' => SubjectFileType::class,
             'embedding_status' => FileEmbeddingStatus::class,
             'metadata' => 'array',
             'uploaded_at' => 'datetime',
@@ -33,6 +35,11 @@ class ProgramFile extends Model
     public function program(): BelongsTo
     {
         return $this->belongsTo(Program::class);
+    }
+
+    public function subject(): BelongsTo
+    {
+        return $this->belongsTo(Subject::class);
     }
 
     public function uploader(): BelongsTo

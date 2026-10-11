@@ -12,6 +12,8 @@ use App\Services\SubjectTopicExtractionService;
 use App\SubjectTopicExtractionStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -54,6 +56,8 @@ class SubjectTopicExtractionController extends Controller
                 'upload_status' => $file->upload_status?->value,
                 'embedding_status' => $file->embedding_status?->value,
                 'usable_pages_count' => $file->usable_pages_count,
+                'subject_id' => $file->subject_id,
+                'subject_name' => $file->subject?->name,
                 'eligible' => $file->upload_status?->value === 'uploaded'
                     && $file->mime_type === 'application/pdf'
                     && $file->embedding_status?->value === 'complete'
@@ -79,24 +83,80 @@ class SubjectTopicExtractionController extends Controller
         return to_route('programs.subjects.topics-extraction.show', [$program, $subject, $extraction]);
     }
 
-    public function show(Program $program, Subject $subject, SubjectTopicExtraction $topicExtraction): Response
-    {
+    public function show(
+        Program $program,
+        Subject $subject,
+        SubjectTopicExtraction $topicExtraction,
+        SubjectTopicExtractionService $service,
+    ): Response {
         $topicExtraction->load(['requester:id,name', 'reviewer:id,name']);
         $sourcePages = collect();
         if (in_array($topicExtraction->status, [SubjectTopicExtractionStatus::Reviewing, SubjectTopicExtractionStatus::Published], true)) {
             $snapshot = collect($topicExtraction->source_files)->keyBy('id');
+            $programFileIds = $snapshot
+                ->filter(fn (array $file): bool => ($file['source_type'] ?? null) === 'program_file')
+                ->keys();
+            $legacyFileIds = $snapshot
+                ->reject(fn (array $file): bool => ($file['source_type'] ?? null) === 'program_file')
+                ->keys();
+            $legacyMap = DB::table('legacy_program_file_sources')
+                ->where('legacy_type', 'subject_file')
+                ->whereIn('legacy_id', $legacyFileIds)
+                ->pluck('program_file_id', 'legacy_id');
+
             $sourcePages = FilePageEmbedding::query()
-                ->whereIn('subject_file_id', $snapshot->keys())
+                ->where(function ($query) use ($programFileIds, $legacyFileIds, $legacyMap): void {
+                    if ($legacyFileIds->isNotEmpty()) {
+                        $query->whereIn('subject_file_id', $legacyFileIds);
+                    }
+                    $canonicalProgramFileIds = $programFileIds->merge($legacyMap->values())->unique();
+                    if ($canonicalProgramFileIds->isNotEmpty()) {
+                        if ($legacyFileIds->isNotEmpty()) {
+                            $query->orWhereIn('program_file_id', $canonicalProgramFileIds);
+                        } else {
+                            $query->whereIn('program_file_id', $canonicalProgramFileIds);
+                        }
+                    }
+                    if ($legacyFileIds->isEmpty() && $canonicalProgramFileIds->isEmpty()) {
+                        $query->whereRaw('1 = 0');
+                    }
+                })
                 ->whereNotNull('content')
-                ->orderBy('subject_file_id')
                 ->orderBy('page_number')
-                ->get(['subject_file_id', 'page_number', 'source_hash', 'content'])
-                ->filter(fn (FilePageEmbedding $page): bool => $snapshot->get($page->subject_file_id)['content_hash'] === $page->source_hash)
-                ->unique(fn (FilePageEmbedding $page): string => $page->subject_file_id.':'.$page->page_number)
-                ->map(fn (FilePageEmbedding $page): array => [
-                    'source_file_id' => $page->subject_file_id,
-                    'page_number' => $page->page_number,
-                    'text' => str($page->content)->squish()->limit(1400)->toString(),
+                ->get(['id', 'subject_file_id', 'program_file_id', 'page_number', 'source_hash', 'content'])
+                ->flatMap(function (FilePageEmbedding $page) use ($legacyMap, $programFileIds): Collection {
+                    if ($page->subject_file_id !== null) {
+                        return collect([[
+                            'source_file_id' => $page->subject_file_id,
+                            'page_number' => $page->page_number,
+                            'source_hash' => $page->source_hash,
+                            'content' => $page->content,
+                        ]]);
+                    }
+
+                    $legacySourceIds = $legacyMap
+                        ->filter(fn (mixed $programFileId): bool => (int) $programFileId === (int) $page->program_file_id)
+                        ->keys()
+                        ->map(fn (int|string $legacyId): int => (int) $legacyId);
+                    $programSourceIds = $programFileIds->contains((int) $page->program_file_id)
+                        ? collect([(int) $page->program_file_id])
+                        : collect();
+
+                    return $legacySourceIds->merge($programSourceIds)->unique()->map(fn (int $sourceId): array => [
+                        'source_file_id' => $sourceId,
+                        'page_number' => $page->page_number,
+                        'source_hash' => $page->source_hash,
+                        'content' => $page->content,
+                    ]);
+                })
+                ->filter(fn (array $page): bool => $page['source_file_id'] !== null
+                    && $snapshot->has($page['source_file_id'])
+                    && $snapshot->get($page['source_file_id'])['content_hash'] === $page['source_hash'])
+                ->unique(fn (array $page): string => $page['source_file_id'].':'.$page['page_number'])
+                ->map(fn (array $page): array => [
+                    'source_file_id' => $page['source_file_id'],
+                    'page_number' => $page['page_number'],
+                    'text' => str($page['content'])->squish()->limit(1400)->toString(),
                 ])->values();
         }
 
@@ -122,7 +182,7 @@ class SubjectTopicExtractionController extends Controller
             ],
             'sourcePages' => $sourcePages,
             'canReview' => $topicExtraction->status === SubjectTopicExtractionStatus::Reviewing,
-            'sourceSnapshotCurrent' => $this->snapshotCurrent($topicExtraction),
+            'sourceSnapshotCurrent' => $service->isSnapshotCurrent($topicExtraction),
         ]);
     }
 
@@ -158,25 +218,5 @@ class SubjectTopicExtractionController extends Controller
         $topicExtraction->delete();
 
         return to_route('programs.subjects.topics-extraction.index', [$program, $subject]);
-    }
-
-    private function snapshotCurrent(SubjectTopicExtraction $extraction): bool
-    {
-        $snapshot = $extraction->source_files;
-        if (! is_array($snapshot)) {
-            return false;
-        }
-        $files = Subject::query()->find($extraction->subject_id)?->files()
-            ->whereIn('id', collect($snapshot)->pluck('id'))->orderBy('id')->get();
-        if ($files === null || $files->count() !== count($snapshot)) {
-            return false;
-        }
-
-        return $files->map(fn ($file): array => [
-            'id' => $file->id,
-            'content_hash' => $file->content_hash,
-            'title' => $file->title,
-            'mime_type' => $file->mime_type,
-        ])->all() === $snapshot;
     }
 }

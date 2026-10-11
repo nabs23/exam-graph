@@ -2,8 +2,6 @@ import { router } from "@inertiajs/react";
 import { useState } from "react";
 import programFiles from "@/routes/program-files";
 import programUploads from "@/routes/programs/files";
-import subjectFiles from "@/routes/subject-files";
-import subjectUploads from "@/routes/subjects/files";
 
 const fileTypes = [
     "reviewer_ebook",
@@ -16,16 +14,16 @@ const fileTypes = [
 
 export function SourceFileUploadForm({
     ownerId,
-    kind,
+    subjectId,
+    subjects = [],
 }: {
     ownerId: number;
-    kind: "program" | "subject";
+    subjectId?: number;
+    subjects?: { id: number; name: string }[];
 }) {
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
-    const uploads = kind === "program" ? programUploads : subjectUploads;
-    const fileRoutes = kind === "program" ? programFiles : subjectFiles;
 
     async function upload(event: React.ChangeEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -50,7 +48,7 @@ export function SourceFileUploadForm({
                     : file.name.toLowerCase().endsWith(".epub")
                       ? "application/epub+zip"
                       : "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-            const response = await fetch(uploads.uploadUrl(ownerId).url, {
+            const response = await fetch(programUploads.uploadUrl(ownerId).url, {
                 method: "POST",
                 headers: {
                     Accept: "application/json",
@@ -64,13 +62,12 @@ export function SourceFileUploadForm({
                     title: (
                         form.elements.namedItem("title") as HTMLInputElement
                     ).value,
-                    ...(kind === "subject" && {
-                        file_type: (
-                            form.elements.namedItem(
-                                "file_type",
-                            ) as HTMLSelectElement
-                        ).value,
-                    }),
+                    subject_id: subjectId ?? ((
+                        form.elements.namedItem("subject_id") as HTMLSelectElement | null
+                    )?.value || null),
+                    file_type: (
+                        form.elements.namedItem("file_type") as HTMLSelectElement
+                    ).value,
                     original_filename: file.name,
                     mime_type: mime,
                     extension: file.name.split(".").pop()?.toLowerCase(),
@@ -126,7 +123,7 @@ export function SourceFileUploadForm({
                 ).forEach(([name, value]) => xhr.setRequestHeader(name, value));
                 xhr.send(file);
             });
-            const completed = await fetch(fileRoutes.store(result.file_id).url, {
+            const completed = await fetch(programFiles.store(result.file_id).url, {
                 method: "POST",
                 headers: {
                     "X-CSRF-TOKEN":
@@ -171,25 +168,32 @@ export function SourceFileUploadForm({
                         placeholder="Enter a descriptive title"
                     />
                 </label>
-                {kind === "subject" && (
+                {subjectId === undefined && (
                     <label className="min-w-48 flex-1 text-sm font-medium">
-                        <span className="mb-1.5 block">File type</span>
-                        <select
-                            name="file_type"
-                            className="block w-full rounded-lg border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
-                        >
-                            {fileTypes.map((type) => (
-                                <option key={type} value={type}>
-                                    {type
-                                        .replaceAll("_", " ")
-                                        .replace(/\b\w/g, (character) =>
-                                            character.toUpperCase(),
-                                        )}
-                                </option>
-                            ))}
+                        <span className="mb-1.5 block">Subject</span>
+                        <select name="subject_id" defaultValue="" className="block w-full rounded-lg border-input bg-background px-3 py-2 text-sm shadow-sm">
+                            <option value="">Shared across program</option>
+                            {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
                         </select>
                     </label>
                 )}
+                <label className="min-w-48 flex-1 text-sm font-medium">
+                    <span className="mb-1.5 block">File type</span>
+                    <select
+                        name="file_type"
+                        className="block w-full rounded-lg border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+                    >
+                        {fileTypes.map((type) => (
+                            <option key={type} value={type}>
+                                {type
+                                    .replaceAll("_", " ")
+                                    .replace(/\b\w/g, (character) =>
+                                        character.toUpperCase(),
+                                    )}
+                            </option>
+                        ))}
+                    </select>
+                </label>
                 <label className="min-w-48 flex-1 text-sm font-medium">
                     <span className="mb-1.5 block">Document</span>
                     <input

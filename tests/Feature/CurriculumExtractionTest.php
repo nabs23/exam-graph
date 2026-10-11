@@ -479,6 +479,7 @@ test('a reviewer can preview and merge selected duplicate subjects while publish
     $extraTopic = SyllabusTopic::factory()->for($duplicate)->create(['title' => 'Banks', 'code' => null, 'parent_id' => null]);
     $concept = Concept::factory()->for($duplicate)->create(['syllabus_topic_id' => $duplicateTopic->id]);
     $subjectFile = SubjectFile::factory()->for($duplicate)->create();
+    $programFile = ProgramFile::factory()->for($program)->create(['subject_id' => $duplicate->id]);
     $extraction = CurriculumExtraction::factory()->for($program)->for($file)->create([
         'source_hash' => $file->content_hash,
         'source_files' => curriculumSourceSnapshot($file),
@@ -512,6 +513,7 @@ test('a reviewer can preview and merge selected duplicate subjects while publish
     $this->assertDatabaseHas('syllabus_topics', ['id' => $extraTopic->id, 'subject_id' => $target->id]);
     $this->assertDatabaseHas('concepts', ['id' => $concept->id, 'subject_id' => $target->id, 'syllabus_topic_id' => $keptTopic->id]);
     $this->assertDatabaseHas('subject_files', ['id' => $subjectFile->id, 'subject_id' => $target->id]);
+    $this->assertDatabaseHas('program_files', ['id' => $programFile->id, 'subject_id' => $target->id]);
     $this->assertDatabaseCount('subjects', 1);
     expect(Storage::disk('local')->files('curriculum-merges'))->toHaveCount(1);
 });

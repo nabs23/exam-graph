@@ -6,12 +6,15 @@ import programs from '@/routes/programs';
 import { subjects } from '@/lib/curriculum-routes';
 
 type SourceCitation = { source_file_id: number; page_number: number };
+type CitationStatus = 'valid' | 'invalid' | 'unverified';
 type Topic = {
     code: string | null;
     title: string;
     description: string | null;
     parent_index: number | null;
     source_pages: SourceCitation[];
+    citation_status?: CitationStatus;
+    verified_source_pages?: SourceCitation[];
 };
 type SourceFile = { id: number; title: string; content_hash: string; mime_type: string };
 
@@ -186,10 +189,13 @@ function CitationList({ citations, files, pages }: {
 }) {
     return (
         <ul className="space-y-2 rounded-md bg-muted/40 p-3 text-sm">
+            {citations.length === 0 && (
+                <li className="text-muted-foreground">No source page citation was supplied. Verify this item against the selected source files.</li>
+            )}
             {citations.map((citation) => (
                 <li key={`${citation.source_file_id}:${citation.page_number}`}>
-                    <p className="font-medium">{files.get(citation.source_file_id) ?? 'Removed source'} · page {citation.page_number}</p>
-                    <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{pages.get(`${citation.source_file_id}:${citation.page_number}`) ?? 'Source page text is no longer available.'}</p>
+                    <p className="font-medium">{files.get(citation.source_file_id) ?? 'Unmatched source citation'} · page {citation.page_number}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{pages.get(`${citation.source_file_id}:${citation.page_number}`) ?? 'This citation did not match available source-page text.'}</p>
                 </li>
             ))}
         </ul>

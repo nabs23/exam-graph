@@ -6,6 +6,7 @@ import { SourceFiles } from "@/components/source-files";
 import URLTabsContainer from "@/components/url-tabs-container";
 import type { TabItem } from "@/components/url-tabs-container";
 import programs from "@/routes/programs";
+import curriculumGenerations from "@/routes/programs/curriculum-generations";
 
 export default function Program({
     program,
@@ -41,7 +42,6 @@ export default function Program({
             content: (
                 <SourceFiles
                     ownerId={program.id}
-                    kind="program"
                     pollingOnly={["program"]}
                     files={program.files}
                 />
@@ -78,12 +78,20 @@ export default function Program({
                         {program.description}
                     </p>
                 </div>
-                <Link
-                    href={programs.edit(program)}
-                    className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent"
-                >
-                    Edit program
-                </Link>
+                <div className="flex flex-wrap gap-2">
+                    <Link
+                        href={curriculumGenerations.index(program)}
+                        className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent"
+                    >
+                        Curriculum proposals
+                    </Link>
+                    <Link
+                        href={programs.edit(program)}
+                        className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent"
+                    >
+                        Edit program
+                    </Link>
+                </div>
             </div>
             <URLTabsContainer
                 tabs={tabs}

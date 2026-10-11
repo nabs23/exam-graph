@@ -28,4 +28,9 @@ class Program extends Model
     {
         return $this->hasMany(CurriculumExtraction::class);
     }
+
+    public function curriculumGenerations(): HasMany
+    {
+        return $this->hasMany(CurriculumGeneration::class);
+    }
 }

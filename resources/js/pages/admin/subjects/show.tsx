@@ -8,8 +8,9 @@ import type { TabItem } from '@/components/url-tabs-container';
 import { subjects } from '@/lib/curriculum-routes';
 import { subjectTopics } from '@/lib/curriculum-routes';
 
-export default function Subject({ subject, topicExtractionSummary, topicExtractionEnabled, topicExtractionUnavailableReason }: {
-    subject: { id: number; name: string; code: string | null; program: { id: number }; syllabus_topics: SubjectSyllabusTopic[]; concepts: SubjectConcept[]; files: import('@/components/source-files').SourceFile[] };
+export default function Subject({ subject, programFiles, topicExtractionSummary, topicExtractionEnabled, topicExtractionUnavailableReason }: {
+    subject: { id: number; name: string; code: string | null; program: { id: number }; syllabus_topics: SubjectSyllabusTopic[]; concepts: SubjectConcept[] };
+    programFiles: import('@/components/source-files').SourceFile[];
     topicExtractionSummary: { count: number; latest: { id: number; status: string } | null };
     topicExtractionEnabled: boolean;
     topicExtractionUnavailableReason: string | null;
@@ -28,7 +29,7 @@ export default function Subject({ subject, topicExtractionSummary, topicExtracti
         {
             value: 'files',
             label: 'Files',
-            content: <SubjectFilesPanel subjectId={subject.id} files={subject.files} />,
+            content: <SubjectFilesPanel programId={subject.program.id} subjectId={subject.id} files={programFiles} />,
         },
         {
             value: 'extraction',

@@ -9,6 +9,7 @@ use App\Services\SubjectTopicExtractionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -53,7 +54,8 @@ class SubjectController extends Controller
         $topicExtractionUnavailableReason = $topicExtractionService->unavailableReason();
 
         return Inertia::render('admin/subjects/show', [
-            'subject' => $subject->load(['program', 'syllabusTopics' => fn (HasMany $query): HasMany => $query->orderBy('sort_order')->orderBy('id'), 'concepts' => fn (HasMany $query): HasMany => $query->orderBy('sort_order')->orderBy('id'), 'files.uploader:id,name']),
+            'subject' => $subject->load(['program', 'syllabusTopics' => fn (HasMany $query): HasMany => $query->orderBy('sort_order')->orderBy('id'), 'concepts' => fn (HasMany $query): HasMany => $query->orderBy('sort_order')->orderBy('id')]),
+            'programFiles' => $subject->programFiles()->with(['uploader:id,name', 'subject:id,name'])->latest()->get(),
             'topicExtractionSummary' => [
                 'count' => $subject->topicExtractions()->count(),
                 'latest' => $latestTopicExtraction === null ? null : [
@@ -79,7 +81,12 @@ class SubjectController extends Controller
      */
     public function update(SubjectRequest $request, Program $program, Subject $subject): RedirectResponse
     {
-        $subject->update($request->validated());
+        $data = $request->validated();
+        if ($subject->program_id !== (int) $data['program_id'] && $subject->programFiles()->exists()) {
+            throw ValidationException::withMessages(['program_id' => 'Reassign or remove subject-associated program files before moving this subject.']);
+        }
+
+        $subject->update($data);
 
         return redirect()->to($subject->curriculumRoute('subjects.show'));
     }
@@ -89,7 +96,7 @@ class SubjectController extends Controller
      */
     public function destroy(Program $program, Subject $subject): RedirectResponse
     {
-        abort_if($subject->concepts()->exists() || $subject->syllabusTopics()->exists() || $subject->files()->exists() || $subject->topicExtractions()->exists(), 422, 'Remove the subject content and source files before deleting it.');
+        abort_if($subject->concepts()->exists() || $subject->syllabusTopics()->exists() || $subject->files()->exists() || $subject->programFiles()->exists() || $subject->topicExtractions()->exists(), 422, 'Remove the subject content and source files before deleting it.');
         $subject->delete();
 
         return to_route('subjects.index');
