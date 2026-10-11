@@ -19,6 +19,7 @@ This directory contains the product, curriculum, architecture, requirements, and
 13. [Advanced AI features roadmap](12-h-advanced-ai-features-roadmap.md), starting with subject-scoped RAG for structured concept drafts
 14. [CI/CD setup guide](13-ci-cd-setup-guide.md)
 15. [Curriculum extraction handoff checklist](next-tasks-handoff.md)
+16. [Subject topic extraction implementation plan](12-i-subject-topic-extraction-implementation-plan.md), which turns 12-D into a scoped route, reviewer UI, Laravel AI agent, and durable topic-to-source-page mapping.
 
 ## Directory Contents
 
@@ -52,6 +53,7 @@ docs/
 | Planning | [12-F — Learner Tutor and Practice Drafts](12-f-learner-tutor-practice-drafts.md) | Deferred notes for future learner and practice features. |
 | Planning | [12-G — Embedding MVP Governance](12-g-ai-governance-evaluation-rollout.md) | Evaluation, security/privacy review, and rollout gates for file embeddings only. |
 | Planning | [12-H — Advanced AI Features Roadmap](12-h-advanced-ai-features-roadmap.md) | First advanced priority: subject-scoped RAG that drafts structured concepts for reviewer approval. |
+| Planning | [12-I — Subject Topic Extraction Implementation Plan](12-i-subject-topic-extraction-implementation-plan.md) | Implements the 12-D subject-scoped topic extraction design, including the subject tab, dedicated route, structured-output agent, reviewer workflow, and persistent source-page mapping. |
 | Operations | [13 — CI/CD Setup Guide](13-ci-cd-setup-guide.md) | GitHub Actions, Docker Hub, and Coolify setup for testing and deployment. |
 | Planning | [Curriculum Extraction Handoff Checklist](next-tasks-handoff.md) | Records the completed workflow, environment verification steps, known operational follow-ups, and next product decisions. |
 

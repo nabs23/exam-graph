@@ -14,7 +14,7 @@ Add dated notes here. Keep the newest entry first.
 - Decision: Retain `SubjectFile` as the source-document workflow. A subject file may be an official curriculum, questionnaire, reviewer textbook, note, or another relevant source. It continues to support PDF text extraction and embeddings.
 - Direction: Extract recursive syllabus topics only from the selected subject’s source files. The reviewer edits and publishes topics into that existing subject; extraction never creates or merges subjects.
 - Why: The official resolution has a deep numbered hierarchy that the program-wide proposal summarized inconsistently. Subject-first extraction narrows the input and review surface, preserves manual control of subjects, and makes source evidence belong to the subject it supports.
-- Next action: Replace the program-file/curriculum-extraction implementation with the subject-scoped topic-extraction workflow described below.
+- Next action: Implement the subject-scoped topic-extraction workflow using [12-I — Subject Topic Extraction Implementation Plan](12-i-subject-topic-extraction-implementation-plan.md), while preserving the direction and safeguards in [12-D](12-d-curriculum-extraction-subjects-concepts.md).
 
 <!--
 ### YYYY-MM-DD — Short title
@@ -31,6 +31,8 @@ Add dated notes here. Keep the newest entry first.
 - [x] The program-wide workflow is superseded by the subject-first direction below. Do not extend it or run its remaining operational-verification checklist.
 
 ## Implementation plan: subject-first sources and topic extraction
+
+Use [12-I — Subject Topic Extraction Implementation Plan](12-i-subject-topic-extraction-implementation-plan.md) for the phased implementation sequence, including the subject-page tab, dedicated nested route, new Laravel AI agent, durable topic-to-source-page mappings, and legacy workflow retirement. The checklist below records the product direction and remains useful as a high-level completion summary.
 
 - [ ] Remove the `program_files` product surface and program-wide curriculum-extraction feature.
   - Remove its routes, controllers, models, jobs, services, agent, UI pages/components, Wayfinder output, factories, tests, configuration, and database tables after preserving or explicitly retiring existing extraction history.
