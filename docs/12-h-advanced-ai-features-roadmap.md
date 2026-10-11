@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes AI features beyond the foundational file-embedding work in 12-A through 12-C. Official program curriculum proposals are implemented separately in [12-D](12-d-curriculum-extraction-subjects-concepts.md); subject-concept RAG and later features still need their own implementation decision, evaluation, and rollout gate.
+This document describes AI features beyond the foundational file-embedding work in 12-A through 12-C. Subject-scoped official syllabus-topic extraction is planned separately in [12-D](12-d-curriculum-extraction-subjects-concepts.md); subject-concept RAG and later features still need their own implementation decision, evaluation, and rollout gate.
 
 ## Priority 1 — RAG for subject concept creation
 
@@ -57,7 +57,7 @@ Do not ask the model to invent concept IDs, official syllabus codes, prerequisit
 
 ### Explicitly out of scope for the first RAG iteration
 
-Automatic concept publication, graph/prerequisite generation, lesson generation, learner tutoring, practice-question generation, hybrid search, reranking, agent tools, and autonomous multi-step agents. Program-wide official syllabus extraction is delivered separately in [12-D](12-d-curriculum-extraction-subjects-concepts.md).
+Automatic concept publication, graph/prerequisite generation, lesson generation, learner tutoring, practice-question generation, hybrid search, reranking, agent tools, and autonomous multi-step agents. Subject-scoped official syllabus-topic extraction is planned separately in [12-D](12-d-curriculum-extraction-subjects-concepts.md).
 
 ## Later advanced features
 

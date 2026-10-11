@@ -69,7 +69,7 @@ Add dated notes here. Keep the newest entry first.
 
 ## Useful references
 
-- [Superseded official curriculum extraction design](12-d-curriculum-extraction-subjects-concepts.md)
+- [Current subject-scoped topic-extraction design](12-d-curriculum-extraction-subjects-concepts.md)
 - [AI integration plan](12-laravel-ai-sdk-integration-plan.md)
 - [Advanced AI features roadmap](12-h-advanced-ai-features-roadmap.md)
 - [Executable development plan](08-executable-development-plan.md)

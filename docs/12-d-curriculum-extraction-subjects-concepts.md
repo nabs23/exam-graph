@@ -1,40 +1,54 @@
-# 12-D — Official Curriculum Extraction
+# 12-D — Subject-Scoped Syllabus Topic Extraction
 
-## Status
+## Status and direction
 
-Implemented as an administrator-only, reviewer-controlled workflow for proposing official subjects and syllabus topics from the completed program PDFs. Instructional concepts remain a separate feature in [12-H](12-h-advanced-ai-features-roadmap.md).
+This is the current design for official syllabus-topic extraction. It supersedes the previously implemented program-wide workflow that proposed subjects and topics from program files. Administrators create program subjects manually; extraction works only within one existing subject and never creates, merges, or renames subjects.
+
+The subject-first workflow is planned and is not yet implemented. See [the current handoff](next-tasks-handoff.md) for implementation and operational follow-ups.
+
+## Goal
+
+Help a reviewer turn selected source files attached to an existing subject into a complete, editable hierarchy of syllabus topics, preserving official codes and page citations. Only explicit reviewer publication writes topics to the subject.
 
 ## Scope
 
-- Select a program. Every uploaded program PDF with completed page text and VoyageAI embeddings is included in one extraction snapshot.
-- Reuse stored PDF text page by page. This workflow does not download or reprocess original files and does not add OCR, document classification, semantic chunks, or new extraction models.
-- Ask the configured Laravel AI SDK text provider for a structured proposal of official subject and syllabus-topic names, optional codes, descriptions, recursive hierarchy, and source-file/page references. The model must not invent codes. If a description is absent from the source, it drafts a concise description from the cited passage and curriculum context, and labels it AI-generated for reviewer verification.
-- Preserve the ordered source-file IDs, titles, and content hashes; the snapshot hash; provider, model, prompt version, original proposal, final reviewed selection and edits, lifecycle status, requester, reviewer, and review timestamp for each extraction.
-- Keep the proposal private until a content administrator reviews it. The reviewer may edit details, exclude proposals, publish selected subjects/topics, or reject the entire proposal.
-- Publish only to the existing `subjects` and `syllabus_topics` tables. Do not create instructional concepts or prerequisite relationships.
+- Start an extraction for one existing subject using an explicit selection of that subject's source files.
+- Reuse the selected files' stored page text and preserve source-file identity, content hash/version, and original page number. Do not accept files owned by another subject.
+- Support official hierarchical curricula as well as non-outline sources. For a numbered official outline, extract every source-supported item, preserve its official code and order, and derive each parent from the supplied hierarchy. For non-outline material, propose relevant topics without inventing official codes.
+- Keep each proposal private and reviewer-controlled. The reviewer can edit, exclude, reorder, publish, or reject proposed topics.
+- Publish only `syllabus_topics` under the existing subject, in one transaction. Do not create or merge subjects, instructional concepts, concept mappings, or prerequisite relationships.
 
-## Workflow and safeguards
+## Proposal record and provenance
 
-1. An administrator starts extraction from a program with at least one uploaded program PDF that has complete page embeddings matching its current content hash.
-2. The job sends bounded file-ID and page-numbered text from the snapshot to the configured provider/model. The feature is disabled by default and requires explicit provider, model, and API-key configuration; PostgreSQL and pgvector must be available.
-3. Validate the structured response, bounds, recursive hierarchy, and every cited file/page pair against the supplied snapshot. Invalid proposals fail with a safe error category; provider messages and source text are not written to logs or error fields.
-4. A reviewer sees each proposed subject/topic next to its cited file and page excerpt. Subject and topic codes are optional; reviewers can publish accurate names and hierarchy without inventing or supplying codes. AI-drafted descriptions are visibly labeled and must be checked against the cited source before publication.
-5. Publishing rechecks every snapshot file version and proposal state, validates the selected hierarchy and uniqueness of any supplied codes, and creates the selected records in one transaction. A newly uploaded file does not alter an existing snapshot; changing or removing a snapshot file requires a new extraction. The extraction record retains the full proposal and provenance. Rejection creates no curriculum records.
+Each extraction records the subject, selected source-file snapshot (file IDs, titles, and hashes), snapshot hash, provider, model, prompt/schema version, requester, proposal, review outcome, lifecycle state, and reviewer/timestamps. Every proposed topic cites one or more `subject_file_id` and page-number pairs from the selected snapshot. Any displayed supporting excerpt must come from those cited pages.
 
-Statuses are `queued`, `processing`, `reviewing`, `published`, `rejected`, and `failed`. Re-running after rejection/failure creates a separate record; an active or reviewable extraction for the same program-source snapshot prevents duplicate dispatch.
+If a selected file changes or is removed after extraction, publication is rejected and the reviewer must create a new extraction. Files added after extraction do not silently enter the snapshot. Limit handling for source sets that exceed the configured input bound must be decided before implementation; see the handoff's operational follow-ups.
 
-## Not included
+## Extraction and review safeguards
 
-OCR, image-only PDFs, DOCX/EPUB extraction, semantic chunking, official curriculum versioning, blueprint validation, prerequisite suggestions, subject-concept extraction, concept mapping, and evaluation of extraction precision/recall remain out of scope. Embeddings are used only as an ingestion readiness gate; they are not evidence for official facts. Source-page text is the evidence and the reviewer is the only publisher.
+1. The content administrator selects an existing subject and one or more completed subject source files.
+2. The application verifies ownership and eligibility, snapshots the source versions, and sends only bounded page text from that snapshot to the configured provider/model.
+3. Validate the structured proposal, hierarchy, official code preservation, bounds, and every cited file/page pair against the snapshot. Reject incomplete or malformed official hierarchies before review; do not silently publish a partial outline.
+4. Present each proposal with its source citations for reviewer comparison. The reviewer may edit, exclude, reorder, publish selected topics, or reject the extraction.
+5. Before publication, recheck the subject, snapshot versions, proposal state, hierarchy, and topic-code uniqueness. Write the selected hierarchy atomically to the existing subject. Rejection or exclusion creates no corresponding topic records.
 
-## Configuration
+Use safe failure categories and a correlation identifier for provider failures. Do not log provider payloads, source text, credentials, or signed storage URLs. Keep extraction gated until processing rights, provider terms, and the reviewer pilot are approved for the selected source set.
 
-Set `AI_OFFICIAL_CURRICULUM_EXTRACTION_ENABLED=true`, an explicit `AI_OFFICIAL_CURRICULUM_PROVIDER`, `AI_OFFICIAL_CURRICULUM_MODEL`, and the provider API key. Configure the character bound, timeout, and queue retry/backoff values through the matching `AI_OFFICIAL_CURRICULUM_*` variables in `.env.example`. Keep this feature off until provider terms, rights to process the selected files, and a small reviewer pilot are approved.
+## Evaluation
+
+Evaluate at least one official hierarchical curriculum, questionnaire, reviewer textbook, and set of notes. Measure hierarchy completeness, citation accuracy, duplicate handling, and reviewer workload against thresholds agreed before the pilot. For the LECPA FAR official source, verify that the `4.2` PPE branch is reproduced through `4.2.5.1.1`–`4.2.5.1.3`, with correct parents, ordering, and citations.
 
 ## Acceptance criteria
 
-- Only authorized content administrators can create, review, publish, or reject proposals.
-- At least one completed program-file text embedding is required; every file included in a snapshot matches its current content hash.
-- Every proposed subject/topic cites a file/page pair supplied to the model; invalid citations and malformed hierarchies cannot be published.
-- No subject/topic is created without explicit reviewer selection; reviewer publication is atomic and every snapshot source version is checked.
-- Concepts remain untouched and no AI proposal is treated as an official fact until reviewed and published.
+- Only authorized content administrators can create, review, publish, or reject an extraction.
+- Selected files must belong to the existing subject; proposals cannot create or merge subjects.
+- Every proposed topic is traceable to a selected source file and page; invalid citations cannot be reviewed or published.
+- Numbered official outlines retain all source-supported items, codes, order, and correct parentage; incomplete or invalid hierarchies cannot be published.
+- Changed or removed snapshot files prevent publication; newly added files do not alter an existing snapshot.
+- Reviewer edits, exclusions, ordering, and rejection are respected. Publication writes selected topics to the existing subject in one transaction.
+- No instructional concepts, concept mappings, prerequisites, or AI-authored official facts are created by this workflow.
+- The source-set evaluation passes its agreed completeness, citation, duplicate, and reviewer-workload thresholds before rollout.
+
+## Explicitly out of scope
+
+Subject creation or merging, concept extraction, concept-to-topic mapping, prerequisite generation, OCR without a separate approval, lesson/question generation, learner-facing AI, semantic retrieval, autonomous publication, and official syllabus version management.

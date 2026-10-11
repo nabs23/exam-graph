@@ -1,5 +1,11 @@
 # 12-G — Embedding MVP Governance and Rollout
 
+## Status recheck — 2026-10-11
+
+The PostgreSQL and pgvector target environment is provisioned, as confirmed by the project owner. The repository also contains a dedicated `phpunit.pgvector.xml` configuration and PostgreSQL integration tests for the vector column and embedding workflow. This satisfies the infrastructure prerequisite; a checked-in configuration or test file alone does not establish a recent passing run in the target environment.
+
+12-G is **not yet complete** based on the available project evidence. The project has code-level tests for deletion cleanup, but a passing run of the dedicated pgvector suite in the target environment is not recorded here. Rights and provider-term review for every pilot document, a manually inspected representative corpus run, and review of operational failures and usage before expanding the pilot are still open. The handoff also says processing rights and provider terms remain to be confirmed for each pilot document. The embedding deletion behavior is specified in [12-B](12-b-source-documents-content-mapping.md); verify it in the target-like environment as part of the rollout. Since the handoff moves to subject-owned source files, use that source set for the remaining evaluation and rollout checks.
+
 ## Goal
 
 Enable one bounded AI workflow safely: create VoyageAI text page embeddings for selected program and subject PDFs and store them in PostgreSQL with pgvector.
