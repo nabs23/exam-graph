@@ -2,6 +2,7 @@
 
 $minimumReservation = max(
     max(0, (int) env('AI_OFFICIAL_CURRICULUM_TIMEOUT', 240)) + 120,
+    max(0, (int) env('AI_SUBJECT_TOPIC_EXTRACTION_TIMEOUT', 240)) + 120,
     (int) env('AI_FILE_EMBEDDINGS_JOB_TIMEOUT', 120) + 60,
 );
 

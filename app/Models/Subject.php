@@ -45,6 +45,11 @@ class Subject extends Model
         return $this->hasMany(SubjectFile::class);
     }
 
+    public function topicExtractions(): HasMany
+    {
+        return $this->hasMany(SubjectTopicExtraction::class);
+    }
+
     /** @return array<string, int> */
     public function curriculumRouteParameters(): array
     {

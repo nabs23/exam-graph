@@ -2,9 +2,9 @@
 
 ## Status and relationship to 12-D
 
-**Status: planned; implementation has not started.** This document turns the product and safety requirements in [12-D — Subject-Scoped Syllabus Topic Extraction](12-d-curriculum-extraction-subjects-concepts.md) into an implementation sequence. 12-D remains the normative scope for what extraction may propose and publish. This plan covers the application work needed to deliver it.
+**Status: core subject topic-extraction implementation is complete; source-backed development acceptance remains. Production compliance work is deferred.** This document turns the product requirements in [12-D — Subject-Scoped Syllabus Topic Extraction](12-d-curriculum-extraction-subjects-concepts.md) into an implementation sequence. 12-D remains the normative scope for what subject topic extraction may propose and publish. This plan is limited to that feature. The existing program-wide extraction workflow and program-file management interfaces remain supported and are outside this plan. Development acceptance uses the approved source and criteria below; provider/legal compliance review is a later production-readiness task, not a feature-completion gate.
 
-The current application still contains the earlier program-wide curriculum extraction flow. It proposes subjects and topics from program files. That workflow is superseded by 12-D and must not be extended as the implementation of subject topic extraction.
+Subject topic extraction is an independent workflow. It does not replace or modify program-wide curriculum extraction or program-file management.
 
 ## Goal
 
@@ -26,6 +26,7 @@ Use the Laravel AI SDK through a new subject-specific structured-output agent. K
 - Preserve topic citations after publication in a durable topic-to-source-page mapping. Do not leave published provenance only in extraction JSON. A mapping row should include the topic, source file reference, source hash, title snapshot, and page number. Permit a deleted source file reference to become null while retaining the snapshot metadata, so file deletion does not silently erase the historical citation. Do not copy whole source pages into the mapping table.
 - Reuse `file_page_embeddings` as the current page-text and file/page identity store: read only rows whose `subject_file_id`, `page_number`, and `source_hash` match the selected file snapshot. The embedding vector is not extraction input. Initially require selected files to have completed, usable page text; decide during implementation whether page-text extraction should be decoupled from vector generation so topic extraction does not need vectors.
 - Keep source files private. Send bounded extracted page text to the configured provider, never storage keys, signed URLs, or source bytes.
+- For initial development acceptance, use the official PRC-hosted LECPA syllabus PDF effective October 2022 as the sole required source. Supporting questionnaires, textbooks, and notes are optional follow-up coverage, not blockers to feature completion.
 
 ## Target application design
 
@@ -34,14 +35,14 @@ Use the Laravel AI SDK through a new subject-specific structured-output agent. K
 1. Add a subject-scoped extraction record, provisionally `SubjectTopicExtraction`, with `subject_id`, requester/reviewer IDs, lifecycle status, source snapshot and hash, provider, model, prompt/schema version, proposal, reviewed proposal, safe error category, correlation ID, and review timestamps.
 2. Snapshot each selected file's ID, title, content hash, and other non-secret identity needed for review. The ordered page text is resolved by the selected file IDs and matching hashes in `file_page_embeddings`; do not silently include files uploaded after the request.
 3. Add a durable topic-source mapping table for published `SyllabusTopic` citations. Support multiple file/page citations per topic, store the cited file's snapshot hash/title and original page number, and retain citation metadata if the source file is later deleted.
-4. Add model relationships and deletion behavior for extraction records and topic-source mappings. Define how subject deletion, source file deletion, and existing program extraction history are handled before dropping legacy tables or models.
+4. Add model relationships and deletion behavior for subject extraction records and topic-source mappings. Define how subject deletion and source-file deletion behave. Existing program-wide extraction records and program-file records remain managed by their existing workflows and are outside this plan.
 
 ### Extraction pipeline
 
 1. Add a focused subject topic extraction service and queued job. The request validates that the subject belongs to the route's program, every selected file belongs to the subject, files are complete and eligible, page text exists, and the selected source set is within explicit bounds.
 2. Lock or otherwise consistently snapshot the subject and selected file versions. Prevent duplicate in-flight requests for the same subject, source hash, provider, model, and prompt version.
 3. Build bounded input from the matching page-text rows and call the new `SubjectTopicExtractor` agent using the configured Laravel AI SDK provider/model. Keep the prompt/schema versioned.
-4. Validate structured output before review: bounds, unique and valid codes as applicable, complete hierarchy, valid parent references and order, and every file/page citation against the source snapshot. Reject malformed or incomplete official outlines rather than presenting or publishing a partial tree.
+4. Validate structured output before review: bounds, unique and valid codes as applicable, complete hierarchy, valid parent references and order, and every file/page citation against the source snapshot. Record validation status and reviewer-facing notes with the proposal. A failed automatic check must not hide the generated result from reviewers; publication still blocks invalid hierarchy and citations until corrected.
 5. Keep provider interactions out of controllers. Queue work after commit, support safe retry/polling where the selected provider requires it, and record only actionable safe failure categories and correlation IDs.
 
 ### Review and publication
@@ -49,7 +50,7 @@ Use the Laravel AI SDK through a new subject-specific structured-output agent. K
 - Give reviewers a dedicated extraction detail view with source file/page citations and excerpts resolved from matching page-text rows. Reviewers can edit titles/codes, exclude topics, reorder nodes, change parentage, publish selected topics, or reject the proposal.
 - Before publication, verify that the subject still exists, all source snapshot files and hashes are unchanged, the reviewed hierarchy is valid, and topic codes do not conflict with the subject's existing topics.
 - Write selected `syllabus_topics` and their durable source-page mapping rows in a single database transaction. Set `parent_id` and `sort_order` from the final reviewed hierarchy. Excluded or rejected proposals create no topic rows.
-- Define conflict behavior for existing manually entered topics before implementation. Do not overwrite, merge, or silently deduplicate them. Publication should require an explicit reviewer resolution for collisions.
+- Preserve existing manually entered topics. At publication, skip and report only the conflicting proposal topic; continue with other valid selected topics. Also skip descendants whose proposed parent was skipped. Never overwrite, merge, or silently deduplicate existing topics.
 
 ### Routes and UI
 
@@ -64,61 +65,84 @@ Use the Laravel AI SDK through a new subject-specific structured-output agent. K
 
 ### Phase 0 — Confirm source and retention contracts
 
-- [ ] Confirm the selected file types and completion states supported by the first release.
-- [ ] Choose the maximum selected files, total pages, and total characters; define safe behavior when limits are exceeded.
-- [ ] Decide whether usable page text must currently have a completed vector, or whether text extraction will be separated from embedding status.
-- [ ] Define existing-topic conflict handling and source-file deletion behavior for durable citations.
-- [ ] Define retention, export, or retirement for existing `program_files` and `curriculum_extractions` data before destructive schema cleanup.
-- [ ] Verify that the target database is PostgreSQL with pgvector enabled, since the current page-text records live in the pgvector-backed table. Record the target-environment check before enabling the feature.
+- [x] First release supports uploaded PDFs with completed page text and embedding status.
+- [x] Bounds are configurable: 10 files, 300 pages, and 250,000 characters by default; over-limit requests are rejected before dispatch. The approved 68-page LECPA source has 195,074 extracted characters and therefore fits as one source while preserving original page numbers.
+- [x] Page text currently comes from `file_page_embeddings`, so completed embedding status and matching content hashes are required. Separating text extraction from vector generation is deferred.
+- [x] Existing code/title conflicts block publication until the reviewer edits or excludes the colliding proposal. Source-file deletion nulls the live FK while preserving source ID, title, hash, and page.
+- [x] Keep the existing program-wide extraction and program-file workflows outside this feature; do not retire or alter their interfaces, records, tables, or source objects as part of subject topic extraction.
+- [x] The configured target database is PostgreSQL 18.4 with pgvector enabled. Both new migrations are applied there. Keep the production default disabled; local and test environments may enable the feature explicitly for development acceptance.
+- [x] Approve the PRC-hosted 2022 LECPA syllabus PDF as the initial development evaluation source. Use it for the selected FAR subject; do not use the current “Main Reviewer” upload because its filename identifies a Hospitality Management document, and defer “Accounting Succinctly” because it belongs to another subject and has no page text yet.
 
 ### Phase 1 — Subject-scoped persistence and source mapping
 
-- [ ] Add migrations, models, relationships, factories, and enums/status values for extraction records and durable topic citations.
-- [ ] Add snapshot and ownership checks for selected subject files and page text.
-- [ ] Define explicit delete/retention behavior for files, mappings, extractions, and subjects.
-- [ ] Check: a selected page can be traced from a subject, through its source file and content hash, to its original page number; tampered, missing, cross-subject, or stale data is rejected.
+- [x] Add migrations, models, relationships, factories, and enums/status values for extraction records and durable topic citations.
+- [x] Add snapshot and ownership checks for selected subject files and page text.
+- [x] Define delete/retention behavior for subject files, topic mappings, subject extractions, and subjects. Topic provenance survives subject-file deletion; subjects with topic-extraction history cannot be deleted. Program-wide extraction and program-file retention behavior is outside this plan.
+- [x] Check: tests trace selected pages through subject, file, content hash, and original page number; cross-subject and stale data is rejected.
 
 ### Phase 2 — Agent, queue, and validation
 
-- [ ] Add `SubjectTopicExtractor`, versioned structured schema and prompt, extraction service, job, configuration, and bounded input builder.
-- [ ] Add exhaustive hierarchy and citation validation, idempotency, safe failures, retry/polling behavior, and duplicate in-flight protection.
-- [ ] Add focused tests using Laravel AI SDK fakes; provider tests must not make network calls.
-- [ ] Check: unsupported or incomplete source sets fail safely, malformed structures never enter review, and every accepted citation resolves to the selected snapshot.
+- [x] Add `SubjectTopicExtractor`, versioned structured schema and prompt, extraction service, job, configuration, and bounded input builder.
+- [x] Add hierarchy and citation validation, safe failures, retry/polling behavior, and duplicate in-flight protection. Validation findings accompany proposals for review rather than blocking access to the result.
+- [x] Add focused tests using Laravel AI SDK fakes; provider tests do not make network calls.
+- [x] Check: unsupported or incomplete source sets fail safely and every accepted citation resolves to the selected snapshot.
 
 ### Phase 3 — Scoped routes and reviewer UI
 
-- [ ] Add nested, scoped routes and controller actions for listing/requesting, viewing, publishing, rejecting, and allowed retry/delete operations.
-- [ ] Generate and use Wayfinder helpers.
-- [ ] Add the subject show tab and `SubjectTopicExtractionPanel` component.
-- [ ] Add a dedicated route page and reviewer detail UI with source page evidence, edit/exclude/reorder controls, and publish/reject actions.
-- [ ] Check: a subject from another program, a file from another subject, and an unauthorized user cannot access or mutate the extraction.
+- [x] Add nested, scoped routes and controller actions for listing/requesting, viewing, publishing, rejecting, and allowed retry/delete operations.
+- [x] Generate and use Wayfinder helpers.
+- [x] Add the subject show tab and `SubjectTopicExtractionPanel` component.
+- [x] Add a dedicated route page and reviewer detail UI with source page evidence, edit/exclude/reorder controls, and publish/reject actions.
+- [x] Check: nested program/subject scope and selected-file ownership are covered by feature tests; all routes remain in the content-management authorization group.
 
-### Phase 4 — Atomic publication and legacy retirement
+### Phase 4 — Atomic publication and subject-workflow isolation
 
-- [ ] Publish reviewed topics and source mappings atomically after revalidating the subject, source snapshot, hierarchy, and code collisions.
-- [ ] Verify rejection, exclusion, changed/deleted sources, and transaction failures leave no partial topic tree.
-- [ ] Retire program-wide extraction routes, UI, agent, job, service, config, and tests after the approved history-retention/migration path is implemented.
-- [ ] Remove or migrate program-file functionality only as directed by the current handoff and after confirming no remaining application references or data-retention dependency.
-- [ ] Check: subject manual data is preserved; no proposal silently overwrites existing topics; every published topic retains its file/page provenance.
+- [x] Publish reviewed topics and source mappings atomically after revalidating the subject, source snapshot, hierarchy, and code collisions.
+- [x] Verify rejection, exclusion, changed/deleted sources, and transaction failures leave no partial topic tree.
+- [x] Keep publication inside the subject-scoped service and transaction. Publish only reviewer-selected syllabus topics and their topic-source mappings.
+- [x] Check: subject manual data is preserved; code/title collisions skip only the conflicting proposal topic, dependent descendants are reported, and unrelated selected topics publish with their source-page provenance.
+- [x] Check: subject extraction routes and file selection operate only on the selected subject. Program-wide extraction and program-file interfaces remain outside the subject workflow and are not retired by this plan.
 
-### Phase 5 — Evaluation and gated rollout
+### Phase 5 — Development acceptance
 
-- [ ] Evaluate a rights-cleared official hierarchical curriculum, questionnaire, reviewer textbook, and notes.
-- [ ] Measure hierarchy completeness, citation precision, duplicate/collision handling, page coverage, reviewer corrections, and time-to-review. Agree thresholds before the pilot.
-- [ ] For the LECPA FAR official source, verify the `4.2` PPE branch through `4.2.5.1.1`–`4.2.5.1.3`, including codes, parentage, order, and page mappings.
-- [ ] Confirm provider processing rights, provider terms, retention, budget, and failure diagnostics for the selected pilot sources.
-- [ ] Keep the feature disabled until source rights, target PostgreSQL/pgvector, evaluation, and reviewer pilot gates are passed.
+- [x] Select the official PRC-hosted LECPA syllabus PDF effective October 2022 as the initial development source. Its printed page 2 contains the target FAR PPE branch.
+- [x] Set the acceptance scope to that branch; questionnaires, reviewer textbooks, and notes are optional follow-up coverage and do not block feature completion.
+- [x] Define a reviewer-correctable acceptance criterion: after review, the published branch must match the codes, titles, parentage, sibling order, and printed-page citations below. The AI draft may need edits; record corrections and review time without blocking the initial feature release on an arbitrary percentage or time target.
+- [ ] Run the approved source through the full request, review, and publication flow and record its source hash, model/prompt version, reviewer edits, and final page mappings. This is the only remaining feature-development acceptance item; source selection and the gold outline are approved below.
+- [x] Confirm duplicate/collision, ownership, stale-source, and atomic-publication failure handling through the feature suite.
+
+#### Approved initial source and gold outline
+
+Source: [official PRC LECPA syllabus PDF](https://www.prc.gov.ph/sites/default/files/2022-30%20Annexes%20Syllabi%20Effective%20October%202022.pdf), effective October 2022. The accepted development slice is on printed page 2:
+
+```text
+4.0 Non-financial Assets
+└── 4.2 Property, plant, and equipment
+    └── 4.2.5 Subsequent measurement
+        └── 4.2.5.1 Cost method
+            ├── 4.2.5.1.1 Depreciation
+            ├── 4.2.5.1.2 Depreciation methods
+            └── 4.2.5.1.3 Changes in useful life and depreciation methods
+```
+
+Initial acceptance requires all seven nodes, exact official codes, the hierarchy and sibling order shown above, and a valid citation to printed page 2 for each node. The reviewer may edit the draft before publishing. No further model-quality threshold is required for the first development release; log corrections, citation adjustments, and review time to inform later evaluation.
+
+### Deferred production-compliance work
+
+- [ ] Before production rollout, review provider terms, source rights, data retention, budget, and failure diagnostics for every source category enabled in production.
+- [ ] Add representative questionnaires, reviewer textbooks, and notes to a later evaluation set when suitable files are available in the same subject and have usable page text.
+- [x] Keep the environment default disabled; local and test environments may enable the feature explicitly for development acceptance.
 
 ## Acceptance criteria
 
 - The topic-extraction tab on a subject page and the dedicated nested route both operate on that same subject; the route cannot cross program/subject ownership boundaries.
 - Administrators choose one or more eligible files owned by the subject. Each request records an immutable file/hash snapshot; later file changes block publication.
 - Every proposal topic cites one or more selected original source pages, and every published topic keeps durable file/page provenance.
-- Official numbered outlines are complete, ordered, correctly parented, and retain their official codes. Invalid or incomplete outlines cannot be reviewed or published.
+- Official numbered outlines are checked for completeness, order, parentage, codes, and citations. Failed checks appear as notes on the review result; reviewers can inspect and correct the proposal, while publication still blocks invalid hierarchy or citations.
 - Reviewers can edit, exclude, reorder, publish, or reject. Publication writes only reviewer-selected topic rows and citation mappings in one transaction.
 - No subject, concept, concept mapping, prerequisite, lesson, question, or learner-facing output is generated by this workflow.
 - Provider failures, invalid citations, duplicate requests, source changes, code conflicts, and unsupported inputs fail safely without exposing source text, storage credentials, or provider payloads.
-- The pilot passes agreed source coverage, citation, hierarchy, reviewer-workload, privacy, and target-environment gates before enablement.
+- The initial development acceptance branch matches the approved official outline and page citations after reviewer edits. Production compliance and expanded source coverage are tracked separately under deferred work.
 
 ## Out of scope
 

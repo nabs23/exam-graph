@@ -13,6 +13,7 @@ use App\Http\Controllers\QuizController;
 use App\Http\Controllers\StudyController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\SubjectFileController;
+use App\Http\Controllers\SubjectTopicExtractionController;
 use App\Http\Controllers\SyllabusTopicController;
 use Illuminate\Support\Facades\Route;
 
@@ -60,6 +61,13 @@ Route::middleware(['auth', 'verified', 'can:manage-content'])->group(function ()
         Route::resource('subjects', SubjectController::class)->only(['index', 'create', 'store'])->names(['index' => 'programs.subjects.index', 'create' => 'programs.subjects.create', 'store' => 'programs.subjects.store']);
         Route::resource('subjects', SubjectController::class)->except(['index', 'create', 'store']);
         Route::prefix('subjects/{subject}')->group(function (): void {
+            Route::get('topics-extraction', [SubjectTopicExtractionController::class, 'index'])->name('programs.subjects.topics-extraction.index');
+            Route::post('topics-extraction', [SubjectTopicExtractionController::class, 'store'])->middleware('throttle:2,1')->name('programs.subjects.topics-extraction.store');
+            Route::get('topics-extraction/{topicExtraction}', [SubjectTopicExtractionController::class, 'show'])->name('programs.subjects.topics-extraction.show');
+            Route::post('topics-extraction/{topicExtraction}/publish', [SubjectTopicExtractionController::class, 'publish'])->name('programs.subjects.topics-extraction.publish');
+            Route::post('topics-extraction/{topicExtraction}/reject', [SubjectTopicExtractionController::class, 'reject'])->name('programs.subjects.topics-extraction.reject');
+            Route::post('topics-extraction/{topicExtraction}/retry', [SubjectTopicExtractionController::class, 'retry'])->middleware('throttle:2,1')->name('programs.subjects.topics-extraction.retry');
+            Route::delete('topics-extraction/{topicExtraction}', [SubjectTopicExtractionController::class, 'destroy'])->name('programs.subjects.topics-extraction.destroy');
             Route::resource('topics', SyllabusTopicController::class)->names(['index' => 'subjects.topics.index']);
 
             $conceptRoutes = function (): void {

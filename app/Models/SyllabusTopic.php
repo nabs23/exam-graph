@@ -42,6 +42,11 @@ class SyllabusTopic extends Model
         return $this->hasMany(Concept::class);
     }
 
+    public function sources(): HasMany
+    {
+        return $this->hasMany(SyllabusTopicSource::class);
+    }
+
     /** @return array<string, int> */
     public function curriculumRouteParameters(): array
     {

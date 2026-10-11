@@ -46,4 +46,9 @@ class SubjectFile extends Model
     {
         return $this->hasMany(FilePageEmbedding::class);
     }
+
+    public function topicSources(): HasMany
+    {
+        return $this->hasMany(SyllabusTopicSource::class);
+    }
 }

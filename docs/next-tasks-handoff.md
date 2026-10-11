@@ -8,13 +8,34 @@ Use this document as the ongoing handoff and working note for subject source fil
 
 Add dated notes here. Keep the newest entry first.
 
-### 2026-10-03 — Move to subject-first source files
+### 2026-10-11 — Approve initial development source set
 
-- Decision: Remove program-file uploads and program-wide generation of subjects. Administrators create program subjects manually.
-- Decision: Retain `SubjectFile` as the source-document workflow. A subject file may be an official curriculum, questionnaire, reviewer textbook, note, or another relevant source. It continues to support PDF text extraction and embeddings.
+- Decision: use the official PRC-hosted LECPA syllabus effective October 2022 as the sole required development acceptance source. The target is the seven-node FAR PPE branch on printed page 2, from `4.0` through `4.2.5.1.3`; the exact outline and acceptance rules are recorded in [12-I](12-i-subject-topic-extraction-implementation-plan.md).
+- Scope: no supporting questionnaire, reviewer textbook, or notes are required to complete this feature. The existing “Main Reviewer” Hospitality PDF is excluded as irrelevant to FAR. “Accounting Succinctly” is deferred until it belongs to the selected FAR subject and has usable page text.
+- Decision: source-rights/provider-terms, retention, budget, and broader compliance review are production-readiness work for later. They do not block development completion. Keep production default-off; local/test may explicitly enable the feature.
+- Remaining development acceptance: run the approved source through request, reviewer correction, and publication, then record source hash, model/prompt version, edits, and final page mappings. No source has yet been uploaded to the app or sent to a provider.
+
+### 2026-10-11 — Verify extraction-route fix and identify pilot-source candidate
+
+- Fixed the subject topic-extraction pages' missing `route_parameters` props used by contextual subject breadcrumbs and back links. The focused feature suite passes (7 tests, 61 assertions), TypeScript passes, Pint passes, and PHP syntax validation passes.
+- Read-only target database review found two subject files and no subject-topic-extraction records. “Main Reviewer” has completed PDF page text, but its processing rights are undocumented. “Test: Accounting Succinctly” has no content hash and is not embedding-complete, so it is not currently eligible. The extraction feature flag is false.
+- Located the PRC-hosted LECPA syllabus PDF and drafted the FAR PPE outline on printed page 2. At the time of this note, source selection and processing-rights decisions were still open; the newer decision above supersedes that status. No source was uploaded to the app or sent to an AI provider.
+- Next action at the time: confirm the approved pilot source. This has since been decided as recorded above. Program-file and program-wide extraction retention decisions remain separate from this plan.
+
+### 2026-10-11 — Implement subject topic extraction alongside existing workflows
+
+- Implemented the subject-scoped topic extraction record, structured agent, queued workflow, nested routes, subject tab, review/publish UI, source-page mappings, and regression coverage. PostgreSQL 18.4 with pgvector is verified and the new migrations are applied.
+- Kept program-wide extraction and program-file management interfaces active and separate from this subject-scoped feature. Their agents, services, jobs, requests, routes, UI, records, and storage remain outside the 12-I scope.
+- Validation: full test suite passed (104 tests, 533 assertions), TypeScript check passed, and Pint passed.
+- Next action at the time: hold rollout pending source, evaluation, and compliance decisions. This is superseded by the newer development-source approval above: compliance and expanded evaluation are deferred; only the approved-source end-to-end development acceptance remains.
+
+### 2026-10-03 — Add subject-scoped sources for topic extraction
+
+- Decision: Administrators create program subjects manually. Existing program-file uploads and program-wide curriculum extraction remain supported.
+- Decision: Use `SubjectFile` for the separate subject topic-extraction workflow. A subject file may be an official curriculum, questionnaire, reviewer textbook, note, or another relevant source. It continues to support PDF text extraction and embeddings.
 - Direction: Extract recursive syllabus topics only from the selected subject’s source files. The reviewer edits and publishes topics into that existing subject; extraction never creates or merges subjects.
-- Why: The official resolution has a deep numbered hierarchy that the program-wide proposal summarized inconsistently. Subject-first extraction narrows the input and review surface, preserves manual control of subjects, and makes source evidence belong to the subject it supports.
-- Next action: Implement the subject-scoped topic-extraction workflow using [12-I — Subject Topic Extraction Implementation Plan](12-i-subject-topic-extraction-implementation-plan.md), while preserving the direction and safeguards in [12-D](12-d-curriculum-extraction-subjects-concepts.md).
+- Why: The official resolution has a deep numbered hierarchy that benefits from a focused subject-scoped extraction path. That path preserves manual control of subjects and ties source evidence to the subject it supports, while the existing program-wide workflow remains available independently.
+- Follow-up: The implementation in [12-I — Subject Topic Extraction Implementation Plan](12-i-subject-topic-extraction-implementation-plan.md) has superseded this immediate action. Continue to preserve the direction and safeguards in [12-D](12-d-curriculum-extraction-subjects-concepts.md).
 
 <!--
 ### YYYY-MM-DD — Short title
@@ -24,43 +45,38 @@ Add dated notes here. Keep the newest entry first.
 - Next action:
 -->
 
-## Superseded implementation
+## Existing program-wide implementation (out of scope for 12-I)
 
 - [x] Program-file uploads and program-wide curriculum extraction were implemented as an administrator-only, reviewer-controlled workflow.
 - [x] Subject files already have independent upload, download, deletion, PDF text extraction, and embedding support.
-- [x] The program-wide workflow is superseded by the subject-first direction below. Do not extend it or run its remaining operational-verification checklist.
+- [x] The program-wide workflow and program-file interfaces remain supported. Subject topic extraction is separate and does not replace or modify them.
 
 ## Implementation plan: subject-first sources and topic extraction
 
-Use [12-I — Subject Topic Extraction Implementation Plan](12-i-subject-topic-extraction-implementation-plan.md) for the phased implementation sequence, including the subject-page tab, dedicated nested route, new Laravel AI agent, durable topic-to-source-page mappings, and legacy workflow retirement. The checklist below records the product direction and remains useful as a high-level completion summary.
+Use [12-I — Subject Topic Extraction Implementation Plan](12-i-subject-topic-extraction-implementation-plan.md) for the phased implementation sequence, including the subject-page tab, dedicated nested route, new Laravel AI agent, and durable topic-to-source-page mappings. Program-wide extraction and program-file operations remain separate and out of scope. The checklist below records the product direction and remains useful as a high-level completion summary.
 
-- [ ] Remove the `program_files` product surface and program-wide curriculum-extraction feature.
-  - Remove its routes, controllers, models, jobs, services, agent, UI pages/components, Wayfinder output, factories, tests, configuration, and database tables after preserving or explicitly retiring existing extraction history.
-  - Check: no application route, relation, queue job, migration dependency, or frontend import refers to `ProgramFile` or `CurriculumExtraction`.
-- [ ] Keep `SubjectFile` as the only owned source-document model.
+- [x] Keep `SubjectFile` as the source-document model used by subject topic extraction.
   - Retain upload, download, deletion, page text extraction, and embeddings. Present its supported use as source material, including curricula, questionnaires, reviewer textbooks, and notes.
-  - Check: a manually created subject can upload and embed each supported source type without a program-file dependency.
-- [ ] Design a subject-scoped topic-extraction record and workflow.
+  - Check: topic extraction reads only the selected subject-file page text; existing program-file behavior remains outside this workflow.
+- [x] Design and implement a subject-scoped topic-extraction record and workflow.
   - Snapshot selected subject-file IDs, titles, hashes, provider, model, prompt version, requester, proposal, review outcome, and lifecycle state. Cite `subject_file_id` and page number for each proposed topic.
   - Check: only files owned by the chosen subject are included and a changed or removed snapshot file prevents publication.
-- [ ] Change the AI contract from subject generation to exhaustive topic extraction.
+- [x] Change the AI contract from subject generation to exhaustive topic extraction.
   - Require every source-supported numbered outline item, preserve official codes, derive parent relationships from the supplied hierarchy, and reject an incomplete or invalid hierarchy before review. Allow non-outline source files to yield relevant topics without invented official codes.
-  - Check: the LECPA FAR source produces the `4.2` PPE branch through `4.2.5.1.1`–`4.2.5.1.3`, with correct parents and citations.
-- [ ] Build the reviewer experience on the subject page.
+  - Check: [ ] the approved LECPA FAR source produces the `4.2` PPE branch through `4.2.5.1.1`–`4.2.5.1.3`, with correct parents and citations after reviewer correction. The source and reviewer gold outline are approved; only the end-to-end run remains.
+- [x] Build the reviewer experience on the subject page.
   - The reviewer may edit, exclude, reorder, publish, or reject proposed topics. Publication writes only `syllabus_topics` to the existing subject in one transaction.
   - Check: manual subjects remain unchanged; excluded or rejected proposals create no topics.
-- [ ] Define and run a source-set evaluation.
-  - Include one official hierarchical curriculum, questionnaire, reviewer textbook, and notes. Measure hierarchy completeness, citation accuracy, duplicate handling, and reviewer workload.
-  - Check: published topics are traceable to their subject files and match the accepted source-set thresholds.
+- [x] Define the initial development source set and acceptance target.
+  - Use one official hierarchical curriculum: the approved PRC LECPA syllabus PDF. Questionnaires, reviewer textbooks, and notes are optional later coverage.
+  - Check: the seven-node branch, exact codes/titles/parents/order, and printed-page citations are specified in 12-I. Record reviewer corrections and workload during the remaining end-to-end run; no arbitrary model-quality threshold blocks the first feature release.
 
 ## Known operational follow-ups
 
-- [ ] Define the retention and migration policy for existing `program_files` and `curriculum_extractions` rows before their tables are removed.
-- [ ] Decide how to handle a selected subject’s source set when its combined page text exceeds the extraction character limit.
-  - Options to evaluate: choose an explicit subset of subject files, stage extraction per file while preserving citations, or use a bounded higher limit.
-  - Check: the chosen approach has documented cost, latency, citation, and reviewer implications.
-- [ ] Improve provider-failure diagnostics without exposing provider payloads or source text. Record a safe correlation identifier and retain the actionable failure category shown to administrators.
-- [ ] Confirm provider terms, retention, and rights to process every pilot document; keep the extraction feature gated until this review is complete.
+- [ ] Define retention and migration for `program_files` and `curriculum_extractions` only if separately requested; this is outside the subject-topic-extraction plan.
+- [x] Define behavior when selected subject page text exceeds the configured extraction character limit: reject before dispatch and prompt reviewers to select fewer files.
+- [x] Record safe correlation identifiers and actionable failure categories without exposing provider payloads or source text.
+- [ ] Deferred to production readiness: review provider terms, retention, and rights for source categories enabled in production. This is not a development feature blocker; keep the production default disabled until the review is complete.
 
 ## Next product work
 

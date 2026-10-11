@@ -28,9 +28,9 @@ If a selected file changes or is removed after extraction, publication is reject
 
 1. The content administrator selects an existing subject and one or more completed subject source files.
 2. The application verifies ownership and eligibility, snapshots the source versions, and sends only bounded page text from that snapshot to the configured provider/model.
-3. Validate the structured proposal, hierarchy, official code preservation, bounds, and every cited file/page pair against the snapshot. Reject incomplete or malformed official hierarchies before review; do not silently publish a partial outline.
-4. Present each proposal with its source citations for reviewer comparison. The reviewer may edit, exclude, reorder, publish selected topics, or reject the extraction.
-5. Before publication, recheck the subject, snapshot versions, proposal state, hierarchy, and topic-code uniqueness. Write the selected hierarchy atomically to the existing subject. Rejection or exclusion creates no corresponding topic records.
+3. Validate the structured proposal, hierarchy, official code preservation, bounds, and every cited file/page pair against the snapshot. Store the validation result and actionable notes with the proposal. A failed automatic check does not hide the generated result from the reviewer; publication remains blocked until hierarchy and citation issues are corrected.
+4. Present each proposal with its source citations and validation notes for reviewer comparison. The reviewer may edit, exclude, reorder, publish selected topics, or reject the extraction.
+5. Before publication, recheck the subject, snapshot versions, proposal state, hierarchy, and topic-code uniqueness. Skip and report individual code/title conflicts, including descendants whose parent was skipped, while atomically publishing the remaining valid selected hierarchy. Never overwrite or merge existing topics. Rejection or exclusion creates no corresponding topic records.
 
 Use safe failure categories and a correlation identifier for provider failures. Do not log provider payloads, source text, credentials, or signed storage URLs. Keep extraction gated until processing rights, provider terms, and the reviewer pilot are approved for the selected source set.
 
@@ -42,7 +42,7 @@ Evaluate at least one official hierarchical curriculum, questionnaire, reviewer 
 
 - Only authorized content administrators can create, review, publish, or reject an extraction.
 - Selected files must belong to the existing subject; proposals cannot create or merge subjects.
-- Every proposed topic is traceable to a selected source file and page; invalid citations cannot be reviewed or published.
+- Every proposed topic is checked against a selected source file and page. Invalid citations may be reviewed with an explicit validation note, but cannot be published.
 - Numbered official outlines retain all source-supported items, codes, order, and correct parentage; incomplete or invalid hierarchies cannot be published.
 - Changed or removed snapshot files prevent publication; newly added files do not alter an existing snapshot.
 - Reviewer edits, exclusions, ordering, and rejection are respected. Publication writes selected topics to the existing subject in one transaction.

@@ -2,13 +2,17 @@ import { Head, Link } from '@inertiajs/react';
 import { SubjectConceptsPanel } from '@/components/subject-concepts-panel';
 import { SubjectFilesPanel } from '@/components/subject-files-panel';
 import { SubjectSyllabusTopicsPanel, type SubjectConcept, type SubjectSyllabusTopic } from '@/components/subject-syllabus-topics-panel';
+import { SubjectTopicExtractionPanel } from '@/components/subject-topic-extraction-panel';
 import URLTabsContainer from '@/components/url-tabs-container';
 import type { TabItem } from '@/components/url-tabs-container';
 import { subjects } from '@/lib/curriculum-routes';
 import { subjectTopics } from '@/lib/curriculum-routes';
 
-export default function Subject({ subject }: {
-    subject: { id: number; name: string; code: string | null; syllabus_topics: SubjectSyllabusTopic[]; concepts: SubjectConcept[]; files: import('@/components/source-files').SourceFile[] };
+export default function Subject({ subject, topicExtractionSummary, topicExtractionEnabled, topicExtractionUnavailableReason }: {
+    subject: { id: number; name: string; code: string | null; program: { id: number }; syllabus_topics: SubjectSyllabusTopic[]; concepts: SubjectConcept[]; files: import('@/components/source-files').SourceFile[] };
+    topicExtractionSummary: { count: number; latest: { id: number; status: string } | null };
+    topicExtractionEnabled: boolean;
+    topicExtractionUnavailableReason: string | null;
 }) {
     const tabs: TabItem[] = [
         {
@@ -25,6 +29,11 @@ export default function Subject({ subject }: {
             value: 'files',
             label: 'Files',
             content: <SubjectFilesPanel subjectId={subject.id} files={subject.files} />,
+        },
+        {
+            value: 'extraction',
+            label: 'Topic extraction',
+            content: <SubjectTopicExtractionPanel program={subject.program} subject={subject} summary={topicExtractionSummary} enabled={topicExtractionEnabled} unavailableReason={topicExtractionUnavailableReason} />,
         },
     ];
 

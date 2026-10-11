@@ -75,6 +75,27 @@ return [
         ],
     ],
 
+    'subject_topic_extraction' => [
+        'enabled' => (bool) env('AI_SUBJECT_TOPIC_EXTRACTION_ENABLED', false),
+        'validation' => (bool) env('AI_SUBJECT_TOPIC_EXTRACTION_VALIDATION', true),
+        'provider' => env('AI_SUBJECT_TOPIC_EXTRACTION_PROVIDER', 'openai'),
+        'model' => env('AI_SUBJECT_TOPIC_EXTRACTION_MODEL'),
+        'models' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('AI_SUBJECT_TOPIC_EXTRACTION_MODELS', '')),
+        ))),
+        'timeout' => (int) env('AI_SUBJECT_TOPIC_EXTRACTION_TIMEOUT', 240),
+        'reasoning_effort' => env('AI_SUBJECT_TOPIC_EXTRACTION_REASONING_EFFORT', 'low'),
+        'max_files' => (int) env('AI_SUBJECT_TOPIC_EXTRACTION_MAX_FILES', 10),
+        'max_pages' => (int) env('AI_SUBJECT_TOPIC_EXTRACTION_MAX_PAGES', 300),
+        'max_characters' => (int) env('AI_SUBJECT_TOPIC_EXTRACTION_MAX_CHARACTERS', 250000),
+        'job_tries' => (int) env('AI_SUBJECT_TOPIC_EXTRACTION_JOB_TRIES', 2),
+        'job_backoff' => [
+            (int) env('AI_SUBJECT_TOPIC_EXTRACTION_JOB_INITIAL_BACKOFF', 15),
+            (int) env('AI_SUBJECT_TOPIC_EXTRACTION_JOB_SECOND_BACKOFF', 45),
+        ],
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | AI Providers
