@@ -1,14 +1,17 @@
 import { Head, Link } from "@inertiajs/react";
-import { OfficialCurriculumExtraction } from "@/components/official-curriculum-extraction";
+import { CurriculumExtractionsPanel } from "@/components/curriculum-extractions-panel";
+import type { CurriculumExtractionSummary } from "@/components/curriculum-extractions-panel";
+import { ProgramSubjectsPanel } from "@/components/program-subjects-panel";
 import { SourceFiles } from "@/components/source-files";
+import URLTabsContainer from "@/components/url-tabs-container";
+import type { TabItem } from "@/components/url-tabs-container";
 import programs from "@/routes/programs";
-import { programSubjects, subjects } from '@/lib/curriculum-routes';
 
 export default function Program({
     program,
+    extractions,
     curriculumExtractionEnabled,
     curriculumExtractionUnavailableReason,
-    latestCurriculumExtraction,
     curriculumExtractionModels,
     curriculumExtractionDefaultModel,
 }: {
@@ -20,12 +23,46 @@ export default function Program({
         subjects: { id: number; name: string; code: string | null }[];
         files: import("@/components/source-files").SourceFile[];
     };
+    extractions: CurriculumExtractionSummary[];
     curriculumExtractionEnabled: boolean;
     curriculumExtractionUnavailableReason: string | null;
-    latestCurriculumExtraction: { id: number; status: string } | null;
     curriculumExtractionModels: string[];
     curriculumExtractionDefaultModel: string | null;
 }) {
+    const tabs: TabItem[] = [
+        {
+            value: "subjects",
+            label: "Subjects",
+            content: <ProgramSubjectsPanel program={program} subjects={program.subjects} />,
+        },
+        {
+            value: "files",
+            label: "Files",
+            content: (
+                <SourceFiles
+                    ownerId={program.id}
+                    kind="program"
+                    pollingOnly={["program"]}
+                    files={program.files}
+                />
+            ),
+        },
+        {
+            value: "extractions",
+            label: "Extractions",
+            content: (
+                <CurriculumExtractionsPanel
+                    program={program}
+                    extractions={extractions}
+                    curriculumExtractionEnabled={curriculumExtractionEnabled}
+                    curriculumExtractionUnavailableReason={curriculumExtractionUnavailableReason}
+                    curriculumExtractionModels={curriculumExtractionModels}
+                    curriculumExtractionDefaultModel={curriculumExtractionDefaultModel}
+                />
+            ),
+        },
+    ];
+
     return (
         <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
             <Head title={program.name} />
@@ -48,40 +85,11 @@ export default function Program({
                     Edit program
                 </Link>
             </div>
-            <OfficialCurriculumExtraction
-                program={program}
-                enabled={curriculumExtractionEnabled}
-                unavailableReason={curriculumExtractionUnavailableReason}
-                latestExtraction={latestCurriculumExtraction}
-                models={curriculumExtractionModels}
-                defaultModel={curriculumExtractionDefaultModel}
-            />
-            <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Subjects</h2>
-                <Link
-                    href={programSubjects.create(program)}
-                    className="text-sm font-medium text-primary hover:underline"
-                >
-                    Create a subject
-                </Link>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {program.subjects.map((subject) => (
-                    <Link
-                        key={subject.id}
-                        href={subjects.show(subject)}
-                        className="rounded-xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
-                    >
-                        {subject.code && <b>{subject.code}</b>}
-                        <p className="mt-1 font-medium">{subject.name}</p>
-                    </Link>
-                ))}
-            </div>
-            <SourceFiles
-                ownerId={program.id}
-                kind="program"
-                pollingOnly={["program"]}
-                files={program.files}
+            <URLTabsContainer
+                tabs={tabs}
+                defaultTab="subjects"
+                variant="full-width"
+                boxedBody={false}
             />
         </main>
     );
