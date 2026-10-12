@@ -46,7 +46,7 @@ Use Laravel AI SDK embedding fakes for job/service behavior. Cover authorized an
 
 ## Deferred gates
 
-Subject-concept RAG is the first proposed advanced feature, described in [12-H](12-h-advanced-ai-features-roadmap.md). Curriculum extraction, lessons, tutor, and practice generation each require their own product decision, evaluation set, security review, and release gate. None is implied by approval of this MVP.
+File-grounded subject-concept RAG remains an optional future feature in [12-H](12-h-advanced-ai-features-roadmap.md). Subject-wide LLM-knowledge concept authoring is separately specified in [12-M](12-m-topic-scoped-concept-extraction-development-plan.md) and has its own reference-set, evaluation, and rollout gates. Lessons, tutor, and practice generation also require their own product decisions, evaluation sets, security reviews, and release gates. None is implied by approval of this embeddings MVP.
 
 ## Non-goals
 

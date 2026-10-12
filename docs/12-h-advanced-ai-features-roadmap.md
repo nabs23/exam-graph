@@ -2,13 +2,13 @@
 
 ## Purpose
 
-This document describes AI features beyond the foundational file-embedding work in 12-A through 12-C. Subject-scoped official syllabus-topic extraction is planned separately in [12-D](12-d-curriculum-extraction-subjects-concepts.md); subject-concept RAG and later features still need their own implementation decision, evaluation, and rollout gate.
+This document describes AI features beyond the foundational file-embedding work in 12-A through 12-C. Subject-scoped official syllabus-topic extraction is planned separately in [12-D](12-d-curriculum-extraction-subjects-concepts.md). Current subject-wide concept drafting is defined in [12-M](12-m-topic-scoped-concept-extraction-development-plan.md) and uses LLM knowledge plus the complete topic tree without RAG; file-grounded retrieval remains an optional future improvement requiring a separate decision, evaluation, and rollout gate.
 
-## Priority 1 — RAG for subject concept creation
+## Optional future improvement — RAG for file-grounded concept review
 
 ### Goal
 
-Help reviewers create a structured set of instructional concepts for a subject by retrieving relevant evidence from that subject's approved files and asking an LLM to propose concepts grounded in that evidence. The result is a draft for reviewer correction and approval; it never writes or publishes curriculum records automatically.
+If reviewers later need proposals grounded in approved file evidence, add retrieval as a separate mode after evaluating the current 12-M LLM-knowledge workflow. The current workflow does not require program files or RAG. Any future retrieval mode must keep proposals private for reviewer correction and approval; it must never publish curriculum automatically.
 
 ### Why this follows the embedding foundation
 
@@ -61,7 +61,7 @@ Automatic concept publication, graph/prerequisite generation, lesson generation,
 
 ## Later advanced features
 
-Consider these only after subject concept RAG is reviewed and stable:
+If file-grounded concept RAG is later added and reviewed as stable, consider these follow-on features:
 
 1. Concept mapping and reviewer-controlled prerequisite edges.
 2. Grounded lesson drafts from approved concepts and source evidence.

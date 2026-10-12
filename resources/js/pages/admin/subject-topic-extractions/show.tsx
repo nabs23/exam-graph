@@ -15,14 +15,17 @@ type Topic = {
     source_pages: SourceCitation[];
     citation_status?: CitationStatus;
     verified_source_pages?: SourceCitation[];
+    matched_existing_topic?: boolean;
 };
 type SourceFile = { id: number; title: string; content_hash: string; mime_type: string };
+type ExistingTopic = { id: number; code: string | null; title: string; parent_id: number | null };
 
 export default function SubjectTopicExtractionShow({
     program,
     subject,
     extraction,
     sourcePages,
+    existingTopics,
     canReview,
     sourceSnapshotCurrent,
 }: {
@@ -49,11 +52,14 @@ export default function SubjectTopicExtractionShow({
         reviewed_at: string | null;
     };
     sourcePages: { source_file_id: number; page_number: number; text: string }[];
+    existingTopics: ExistingTopic[];
     canReview: boolean;
     sourceSnapshotCurrent: boolean;
 }) {
     const citations = new Map(sourcePages.map((page) => [`${page.source_file_id}:${page.page_number}`, page.text]));
     const files = new Map(extraction.source_files.map((file) => [file.id, file.title]));
+    const addedTopicCount = extraction.reviewed_proposal?.topics.filter((topic) => !topic.matched_existing_topic).length ?? 0;
+    const matchedTopicCount = extraction.reviewed_proposal?.topics.filter((topic) => topic.matched_existing_topic).length ?? 0;
     const proposal = extraction.proposal;
     const processing = ['queued', 'processing'].includes(extraction.status);
     const routeParams = { program: program.id, subject: subject.id, topicExtraction: extraction.id };
@@ -104,7 +110,7 @@ export default function SubjectTopicExtractionShow({
                             <section className="space-y-4 rounded-xl border bg-card p-5 shadow-sm">
                                 <div>
                                     <h2 className="text-xl font-semibold">Review proposed topics</h2>
-                                    <p className="text-sm text-muted-foreground">Edit titles, codes, parent topics, and order. Remove the selection check to exclude a topic.</p>
+                                    <p className="text-sm text-muted-foreground">Edit titles, codes, parent topics, and order. Remove the selection check to exclude a topic. Link an exact existing topic match to retain its citation and attach new descendants without changing the existing topic.</p>
                                 </div>
                                 {proposal.topics.map((topic, topicIndex) => (
                                     <article key={topicIndex} className="space-y-4 rounded-lg border p-4">
@@ -114,10 +120,19 @@ export default function SubjectTopicExtractionShow({
                                             <div className="grid flex-1 gap-3 sm:grid-cols-2">
                                                 <label className="space-y-1 text-sm">Topic title<input name={`topics[${topicIndex}][title]`} defaultValue={topic.title} className="w-full rounded-md border bg-background px-3 py-2" /></label>
                                                 <label className="space-y-1 text-sm">Official code (optional)<input name={`topics[${topicIndex}][code]`} defaultValue={topic.code ?? ''} className="w-full rounded-md border bg-background px-3 py-2" /></label>
+                                                <label className="space-y-1 text-sm">Match existing topic
+                                                    <select name={`topics[${topicIndex}][match_existing_topic_id]`} defaultValue="" className="w-full rounded-md border bg-background px-3 py-2">
+                                                        <option value="">Create a new topic</option>
+                                                        {existingTopics.filter((existingTopic) => (existingTopic.code ?? '').trim().toLocaleLowerCase() === (topic.code ?? '').trim().toLocaleLowerCase() && existingTopic.title.trim().toLocaleLowerCase() === topic.title.trim().toLocaleLowerCase()).map((existingTopic) => (
+                                                            <option key={existingTopic.id} value={existingTopic.id}>{existingTopic.code ? `${existingTopic.code} · ` : ''}{existingTopic.title}</option>
+                                                        ))}
+                                                    </select>
+                                                </label>
                                                 <label className="space-y-1 text-sm">Parent topic
-                                                    <select name={`topics[${topicIndex}][parent_index]`} defaultValue={topic.parent_index ?? ''} className="w-full rounded-md border bg-background px-3 py-2">
+                                                    <select name={`topics[${topicIndex}][parent_reference]`} defaultValue={topic.parent_index === null ? '' : `proposal:${topic.parent_index}`} className="w-full rounded-md border bg-background px-3 py-2">
                                                         <option value="">Top level</option>
-                                                        {proposal.topics.map((parent, parentIndex) => parentIndex !== topicIndex ? <option key={parentIndex} value={parentIndex}>{parent.code ? `${parent.code} · ` : ''}{parent.title}</option> : null)}
+                                                        {proposal.topics.map((parent, parentIndex) => parentIndex !== topicIndex ? <option key={`proposal:${parentIndex}`} value={`proposal:${parentIndex}`}>Proposal · {parent.code ? `${parent.code} · ` : ''}{parent.title}</option> : null)}
+                                                        {existingTopics.map((parent) => <option key={`existing:${parent.id}`} value={`existing:${parent.id}`}>Existing · {parent.code ? `${parent.code} · ` : ''}{parent.title}</option>)}
                                                     </select>
                                                 </label>
                                                 <label className="space-y-1 text-sm">Order<input type="number" name={`topics[${topicIndex}][sort_order]`} defaultValue={topicIndex} min={0} className="w-full rounded-md border bg-background px-3 py-2" /></label>
@@ -145,10 +160,10 @@ export default function SubjectTopicExtractionShow({
             {extraction.status === 'published' && extraction.reviewed_proposal && (
                 <section className="space-y-4 rounded-xl border bg-card p-5 shadow-sm">
                     <p className="text-sm">Published by {extraction.reviewer?.name ?? 'a reviewer'} on {extraction.reviewed_at ? formatDate(extraction.reviewed_at) : 'an unknown date'}.</p>
-                    <p className="text-sm font-medium">Added {extraction.reviewed_proposal.topics.length} {extraction.reviewed_proposal.topics.length === 1 ? 'topic' : 'topics'}.</p>
+                    <p className="text-sm font-medium">Added {addedTopicCount} {addedTopicCount === 1 ? 'topic' : 'topics'}{matchedTopicCount > 0 ? ` · linked citations to ${matchedTopicCount} existing ${matchedTopicCount === 1 ? 'topic' : 'topics'}` : ''}.</p>
                     {extraction.reviewed_proposal.topics.map((topic) => (
                         <article key={topic.published_topic_id} className="space-y-2 border-t pt-4">
-                            <h2 className="font-semibold">{topic.code ? `${topic.code} · ` : ''}{topic.title}</h2>
+                            <h2 className="font-semibold">{topic.code ? `${topic.code} · ` : ''}{topic.title}{topic.matched_existing_topic ? ' · Existing topic' : ''}</h2>
                             {topic.description && <p className="text-sm text-muted-foreground">{topic.description}</p>}
                             <CitationList citations={topic.source_pages} files={files} pages={citations} />
                         </article>

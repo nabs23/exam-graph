@@ -27,9 +27,9 @@ use Throwable;
 
 class CurriculumGenerationService
 {
-    private const PROMPT_VERSION = 'curriculum-proposal-v1';
+    private const PROMPT_VERSION = 'curriculum-proposal-v2';
 
-    private const SCHEMA_VERSION = '1';
+    private const SCHEMA_VERSION = '2';
 
     public function __construct(private PdfTextExtractor $pdfTextExtractor) {}
 
@@ -76,7 +76,14 @@ class CurriculumGenerationService
         $model ??= (string) config('ai.curriculum_generation.model');
         $sourceFileIds = array_map('intval', $sourceFileIds);
         $fileIds = array_values(array_unique($sourceFileIds));
-        if ($fileIds === [] || count($fileIds) !== count($sourceFileIds)) {
+        $subjectWideConcepts = $kind === CurriculumGenerationKind::Concepts;
+        if ($subjectWideConcepts) {
+            $ungrounded = true;
+        }
+        if ($subjectWideConcepts && $fileIds !== []) {
+            throw ValidationException::withMessages(['source_file_ids' => 'Subject-wide concept proposals do not use program files.']);
+        }
+        if ((! $subjectWideConcepts && $fileIds === []) || count($fileIds) !== count($sourceFileIds)) {
             throw ValidationException::withMessages(['source_file_ids' => 'Select one or more distinct program files.']);
         }
 
@@ -84,25 +91,29 @@ class CurriculumGenerationService
             throw ValidationException::withMessages(['source_file_ids' => 'Select no more than the allowed number of source files.']);
         }
 
-        return DB::transaction(function () use ($program, $kind, $fileIds, $requester, $subject, $topic, $requestContext, $ungrounded, $model): CurriculumGeneration {
+        return DB::transaction(function () use ($program, $kind, $fileIds, $requester, $subject, $topic, $requestContext, $ungrounded, $model, $subjectWideConcepts): CurriculumGeneration {
             $lockedProgram = Program::query()->lockForUpdate()->findOrFail($program->id);
             $this->assertScope($lockedProgram, $kind, $subject, $topic);
 
-            $query = ProgramFile::query()
-                ->where('program_id', $lockedProgram->id)
-                ->whereIn('id', $fileIds)
-                ->where('upload_status', 'uploaded');
-            if ($subject !== null) {
-                $query->where(fn ($scope) => $scope->whereNull('subject_id')->orWhere('subject_id', $subject->id));
-            }
-            $files = $query->orderBy('id')->lockForUpdate()->get();
+            $files = new Collection;
+            if (! $subjectWideConcepts) {
+                $query = ProgramFile::query()
+                    ->where('program_id', $lockedProgram->id)
+                    ->whereIn('id', $fileIds)
+                    ->where('upload_status', 'uploaded');
+                if ($subject !== null) {
+                    $query->where(fn ($scope) => $scope->whereNull('subject_id')->orWhere('subject_id', $subject->id));
+                }
+                $files = $query->orderBy('id')->lockForUpdate()->get();
 
-            if ($files->count() !== count($fileIds)) {
-                throw ValidationException::withMessages(['source_file_ids' => 'Select only uploaded shared files or files associated with the selected subject.']);
+                if ($files->count() !== count($fileIds)) {
+                    throw ValidationException::withMessages(['source_file_ids' => 'Select only uploaded shared files or files associated with the selected subject.']);
+                }
             }
 
             $sourceFiles = $this->sourceSnapshot($files);
             $sourceHash = hash('sha256', json_encode($sourceFiles, JSON_THROW_ON_ERROR));
+            $scopeSnapshot = $subjectWideConcepts ? $this->subjectScopeSnapshot($subject) : null;
             $provider = (string) config('ai.curriculum_generation.provider');
             $requestHash = $this->requestHash(
                 $kind,
@@ -113,6 +124,7 @@ class CurriculumGenerationService
                 $sourceHash,
                 $provider,
                 $model,
+                $scopeSnapshot,
             );
 
             if ($lockedProgram->curriculumGenerations()
@@ -140,6 +152,7 @@ class CurriculumGenerationService
                 'request_hash' => $requestHash,
                 'source_hash' => $sourceHash,
                 'source_files' => $sourceFiles,
+                'scope_snapshot' => $scopeSnapshot,
                 'provider' => $provider,
                 'model' => $model,
                 'prompt_version' => self::PROMPT_VERSION,
@@ -168,14 +181,24 @@ class CurriculumGenerationService
 
         try {
             $this->assertAvailable();
-            $files = $this->filesForSnapshot($generation);
-            $sourcePages = $this->extractSourcePages($generation, $files, textEnabled: ! $generation->ungrounded_requested);
-            if ($sourcePages === [] && ! $generation->ungrounded_requested) {
-                throw new CurriculumGenerationException('source_text_unavailable');
-            }
+            $subjectWideConcepts = $generation->kind === CurriculumGenerationKind::Concepts && is_array($generation->scope_snapshot);
+            if ($subjectWideConcepts) {
+                if ($generation->subject === null || ! $this->scopeSnapshotMatches($generation, $generation->subject)) {
+                    throw new CurriculumGenerationException('scope_changed');
+                }
+                $files = new Collection;
+                $sourcePages = [];
+                $sourceFiles = [];
+            } else {
+                $files = $this->filesForSnapshot($generation);
+                $sourcePages = $this->extractSourcePages($generation, $files, textEnabled: ! $generation->ungrounded_requested);
+                if ($sourcePages === [] && ! $generation->ungrounded_requested) {
+                    throw new CurriculumGenerationException('source_text_unavailable');
+                }
 
-            $this->assertPageBounds($sourcePages);
-            $sourceFiles = $this->sourceSnapshot($files, $sourcePages, $generation->source_files);
+                $this->assertPageBounds($sourcePages);
+                $sourceFiles = $this->sourceSnapshot($files, $sourcePages, $generation->source_files);
+            }
             $sourceHash = hash('sha256', json_encode($sourceFiles, JSON_THROW_ON_ERROR));
             $generation->forceFill([
                 'source_files' => $sourceFiles,
@@ -189,6 +212,7 @@ class CurriculumGenerationService
                     $sourceHash,
                     $generation->provider,
                     $generation->model,
+                    $generation->scope_snapshot,
                 ),
             ])->save();
 
@@ -196,12 +220,27 @@ class CurriculumGenerationService
                 CurriculumGenerationKind::Subjects => ['program' => ['name' => $generation->program->name, 'code' => $generation->program->code]],
                 CurriculumGenerationKind::Topics => ['subject' => ['name' => $generation->subject->name, 'code' => $generation->subject->code]],
                 CurriculumGenerationKind::Concepts => [
-                    'subject' => ['name' => $generation->subject->name, 'code' => $generation->subject->code],
-                    'topic' => $generation->syllabusTopic === null ? null : ['title' => $generation->syllabusTopic->title, 'code' => $generation->syllabusTopic->code],
+                    'subject_tree' => $generation->scope_snapshot,
                 ],
             };
+            $existingConceptLimit = max(1, (int) config('ai.curriculum_generation.max_existing_concepts', 500));
+            $existingConceptCount = $subjectWideConcepts ? $generation->subject->concepts()->count() : 0;
+            $existingConcepts = $subjectWideConcepts
+                ? $generation->subject->concepts()
+                    ->orderBy('id')
+                    ->limit($existingConceptLimit)
+                    ->get(['id', 'subject_id', 'syllabus_topic_id', 'code', 'title', 'description'])
+                    ->map(fn (Concept $concept): array => [
+                        'syllabus_topic_id' => $concept->syllabus_topic_id,
+                        'code' => $concept->code,
+                        'title' => $concept->title,
+                        'description' => $concept->description,
+                    ])
+                : collect();
             $input = json_encode([
                 'scope' => $scope,
+                'existing_concepts' => $existingConcepts->toArray(),
+                'existing_concepts_truncated' => $existingConceptCount > $existingConcepts->count(),
                 'request_context' => $generation->request_context,
                 'selected_sources' => collect($sourceFiles)->map(fn (array $file): array => [
                     'id' => $file['id'],
@@ -210,8 +249,11 @@ class CurriculumGenerationService
                     'subject_id' => $file['subject_id'],
                 ])->all(),
                 'source_pages' => $sourcePages,
-                'ungrounded' => $generation->ungrounded_requested,
+                'ungrounded' => $subjectWideConcepts || $generation->ungrounded_requested,
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+            if (mb_strlen($input) > max(1, (int) config('ai.curriculum_generation.max_characters', 250000))) {
+                throw new CurriculumGenerationException($subjectWideConcepts ? 'scope_limit_exceeded' : 'source_limit_exceeded');
+            }
 
             $response = (new CurriculumProposalGenerator(
                 $generation->kind,
@@ -236,7 +278,11 @@ class CurriculumGenerationService
                 'error_code' => null,
             ])->save();
         } catch (CurriculumGenerationException $exception) {
-            $this->fail($generation, $exception->errorCode);
+            if ($exception->errorCode === 'scope_changed') {
+                $this->markStale($generation);
+            } else {
+                $this->fail($generation, $exception->errorCode);
+            }
         } catch (Throwable $exception) {
             Log::warning('Curriculum proposal generation failed.', [
                 'curriculum_generation_id' => $generation->id,
@@ -280,6 +326,13 @@ class CurriculumGenerationService
             if ($locked->kind !== CurriculumGenerationKind::Subjects
                 && ($subject === null || (int) $subject->program_id !== (int) $locked->program_id)) {
                 throw ValidationException::withMessages(['generation' => 'The curriculum scope changed. Start a new proposal.']);
+            }
+            if ($locked->kind === CurriculumGenerationKind::Concepts
+                && is_array($locked->scope_snapshot)
+                && ($subject === null || ! $this->scopeSnapshotMatches($locked, $subject))) {
+                $this->markStale($locked);
+
+                return;
             }
             if ($locked->syllabus_topic_id !== null) {
                 $topic = SyllabusTopic::query()->lockForUpdate()->findOrFail($locked->syllabus_topic_id);
@@ -329,17 +382,30 @@ class CurriculumGenerationService
                     throw ValidationException::withMessages(["items.$index.parent_draft_id" => 'Only topic proposals can have a proposed parent.']);
                 }
 
+                $syllabusTopicId = $proposalItem['syllabus_topic_id'] ?? null;
                 $include = filter_var($selection['include'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                if ($locked->kind === CurriculumGenerationKind::Concepts && is_array($locked->scope_snapshot)) {
+                    $selectedTopicId = filter_var($selection['syllabus_topic_id'] ?? null, FILTER_VALIDATE_INT);
+                    $snapshotTopicIds = collect($locked->scope_snapshot['topics'] ?? [])->pluck('id')->map(fn (mixed $id): int => (int) $id);
+                    if ($include && ($selectedTopicId === false || ! $snapshotTopicIds->contains((int) $selectedTopicId))) {
+                        throw ValidationException::withMessages(["items.$index.syllabus_topic_id" => 'Choose a topic from this subject tree.']);
+                    }
+                    $syllabusTopicId = $selectedTopicId !== false && $snapshotTopicIds->contains((int) $selectedTopicId)
+                        ? (int) $selectedTopicId
+                        : null;
+                }
+
                 $reviewedItems[$draftId] = [
                     ...$proposalItem,
                     $titleField => $title,
                     'code' => $code,
                     'description' => $description === null ? null : trim((string) $description),
                     'parent_draft_id' => $parentDraftId,
+                    'syllabus_topic_id' => $syllabusTopicId,
                     'sort_order' => (int) ($selection['sort_order'] ?? $index),
                     'decision' => $include ? 'pending' : 'rejected',
                     'canonical_id' => null,
-                    'review_notes' => [],
+                    'review_notes' => $proposalItem['review_notes'] ?? [],
                 ];
 
                 if ($include) {
@@ -372,6 +438,21 @@ class CurriculumGenerationService
                     if ($conflict !== null) {
                         $reviewedItems[$draftId]['decision'] = 'conflict';
                         $reviewedItems[$draftId]['review_notes'] = [$conflict];
+                        unset($pending[$pendingIndex]);
+                        $progress = true;
+
+                        continue;
+                    }
+
+                    if ($locked->kind === CurriculumGenerationKind::Concepts
+                        && is_array($locked->scope_snapshot)
+                        && ! SyllabusTopic::query()
+                            ->where('subject_id', $locked->subject_id)
+                            ->whereKey($item['syllabus_topic_id'])
+                            ->lockForUpdate()
+                            ->exists()) {
+                        $reviewedItems[$draftId]['decision'] = 'conflict';
+                        $reviewedItems[$draftId]['review_notes'] = ['The assigned topic is no longer available in the selected subject.'];
                         unset($pending[$pendingIndex]);
                         $progress = true;
 
@@ -445,6 +526,7 @@ class CurriculumGenerationService
         string $sourceHash,
         string $provider,
         string $model,
+        ?array $scopeSnapshot = null,
     ): string {
         return hash('sha256', json_encode([
             'kind' => $kind->value,
@@ -453,6 +535,7 @@ class CurriculumGenerationService
             'request_context' => $requestContext,
             'ungrounded' => $ungrounded,
             'source_hash' => $sourceHash,
+            'scope_snapshot' => $scopeSnapshot,
             'provider' => $provider,
             'model' => $model,
             'prompt_version' => self::PROMPT_VERSION,
@@ -478,9 +561,91 @@ class CurriculumGenerationService
             throw ValidationException::withMessages(['syllabus_topic_id' => 'Topic proposals are scoped to a subject.']);
         }
 
+        if ($kind === CurriculumGenerationKind::Concepts && $topic !== null) {
+            throw ValidationException::withMessages(['syllabus_topic_id' => 'Concept proposals cover the complete subject topic tree.']);
+        }
+
         if ($topic !== null && (int) $topic->subject_id !== (int) $subject->id) {
             throw ValidationException::withMessages(['syllabus_topic_id' => 'Choose a topic in this subject.']);
         }
+    }
+
+    /** @return array{subject: array{id: int, name: string, code: ?string}, topics: list<array<string, mixed>>} */
+    private function subjectScopeSnapshot(?Subject $subject): array
+    {
+        if ($subject === null) {
+            throw ValidationException::withMessages(['subject_id' => 'Choose a subject for concept generation.']);
+        }
+
+        $topics = $subject->syllabusTopics()
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id', 'parent_id', 'code', 'title', 'description', 'sort_order']);
+        $maximumTopics = max(1, (int) config('ai.curriculum_generation.max_topics', 500));
+        if ($topics->count() > $maximumTopics) {
+            throw ValidationException::withMessages(['subject_id' => 'This subject has more topics than the generation limit allows.']);
+        }
+
+        if ($topics->isEmpty()) {
+            throw ValidationException::withMessages(['subject_id' => 'Add at least one syllabus topic before drafting concepts for this subject.']);
+        }
+
+        $children = $topics->groupBy(fn (SyllabusTopic $topic): string => (string) ($topic->parent_id ?? 'root'));
+        $ordered = [];
+        $walk = function (?int $parentId, array $path) use (&$walk, &$ordered, $children): void {
+            $key = (string) ($parentId ?? 'root');
+            foreach ($children->get($key, collect()) as $topic) {
+                $topicPath = [...$path, ['id' => (int) $topic->id, 'code' => $topic->code, 'title' => $topic->title]];
+                $ordered[] = [
+                    'id' => (int) $topic->id,
+                    'parent_id' => $topic->parent_id === null ? null : (int) $topic->parent_id,
+                    'code' => $topic->code,
+                    'title' => $topic->title,
+                    'description' => $topic->description,
+                    'sort_order' => (int) $topic->sort_order,
+                    'path' => $topicPath,
+                ];
+                $walk((int) $topic->id, $topicPath);
+            }
+        };
+        $walk(null, []);
+
+        if (count($ordered) !== $topics->count()) {
+            throw ValidationException::withMessages(['subject_id' => 'The subject topic hierarchy is invalid and cannot be used for generation.']);
+        }
+
+        $snapshot = [
+            'subject' => ['id' => (int) $subject->id, 'name' => $subject->name, 'code' => $subject->code],
+            'topics' => $ordered,
+        ];
+        if (mb_strlen(json_encode($snapshot, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)) > max(1, (int) config('ai.curriculum_generation.max_characters', 250000))) {
+            throw ValidationException::withMessages(['subject_id' => 'The subject topic tree is too large for the generation limit.']);
+        }
+
+        return $snapshot;
+    }
+
+    private function scopeSnapshotMatches(CurriculumGeneration $generation, Subject $subject): bool
+    {
+        try {
+            $currentSnapshot = $this->subjectScopeSnapshot($subject);
+        } catch (ValidationException) {
+            return false;
+        }
+
+        return hash_equals(
+            hash('sha256', json_encode($generation->scope_snapshot, JSON_THROW_ON_ERROR)),
+            hash('sha256', json_encode($currentSnapshot, JSON_THROW_ON_ERROR)),
+        );
+    }
+
+    private function markStale(CurriculumGeneration $generation): void
+    {
+        $generation->forceFill([
+            'status' => CurriculumGenerationStatus::Stale,
+            'error_code' => 'scope_changed',
+        ])->save();
     }
 
     /** @return Collection<int, ProgramFile> */
@@ -665,7 +830,7 @@ class CurriculumGenerationService
             CurriculumGenerationKind::Topics => $this->createTopic($generation, $item, $approvedIds, $sortOrder),
             CurriculumGenerationKind::Concepts => Concept::query()->create([
                 'subject_id' => $generation->subject_id,
-                'syllabus_topic_id' => $generation->syllabus_topic_id,
+                'syllabus_topic_id' => $item['syllabus_topic_id'] ?? $generation->syllabus_topic_id,
                 'code' => $item['code'],
                 'title' => $item['title'],
                 'description' => $item['description'],
@@ -770,6 +935,10 @@ class CurriculumGenerationService
             $code = $item['code'] ?? null;
             $description = $item['description'] ?? null;
             $parentDraftId = $item['parent_draft_id'] ?? null;
+            $syllabusTopicId = $item['syllabus_topic_id'] ?? null;
+            $topicIds = collect($generation->scope_snapshot['topics'] ?? [])->pluck('id')->map(fn (mixed $id): int => (int) $id);
+            $topicAssignmentIsValid = $generation->kind !== CurriculumGenerationKind::Concepts
+                || (is_int($syllabusTopicId) && $topicIds->contains($syllabusTopicId));
             if (! is_string($draftId) || preg_match('/\A[a-zA-Z0-9_-]{1,64}\z/', $draftId) !== 1
                 || in_array($draftId, $draftIds, true)
                 || ! $this->validText($title, 255)
@@ -787,6 +956,9 @@ class CurriculumGenerationService
             }
 
             $citations = $item['citations'] ?? [];
+            if ($generation->kind === CurriculumGenerationKind::Concepts && $citations !== []) {
+                throw new CurriculumGenerationException('invalid_proposal');
+            }
             if (! is_array($citations) || count($citations) > 20) {
                 throw new CurriculumGenerationException('invalid_proposal');
             }
@@ -819,10 +991,16 @@ class CurriculumGenerationService
                 'code' => trim($code),
                 'description' => $description === null ? null : trim($description),
                 'parent_draft_id' => $parentDraftId,
+                'syllabus_topic_id' => $generation->kind === CurriculumGenerationKind::Concepts && $topicAssignmentIsValid ? $syllabusTopicId : null,
                 'sort_order' => $index,
                 'citations' => $normalizedCitations,
                 'citation_status' => $citations === [] ? 'unverified' : ($hasInvalidCitation ? 'invalid' : 'valid'),
-                'review_notes' => $hasInvalidCitation ? ['One or more citations do not match a selected source page.'] : [],
+                'review_notes' => $generation->kind === CurriculumGenerationKind::Concepts
+                    ? array_values(array_filter([
+                        'Generated from LLM knowledge without selected program-file grounding.',
+                        $topicAssignmentIsValid ? null : 'The proposed topic is outside the selected subject tree. Choose the correct topic before approval.',
+                    ]))
+                    : ($hasInvalidCitation ? ['One or more citations do not match a selected source page.'] : []),
             ];
             $draftIds[] = $draftId;
         }

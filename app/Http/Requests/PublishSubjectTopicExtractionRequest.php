@@ -29,6 +29,8 @@ class PublishSubjectTopicExtractionRequest extends FormRequest
             'topics.*.code' => ['nullable', 'string', 'max:100'],
             'topics.*.description' => ['nullable', 'string', 'max:2000'],
             'topics.*.parent_index' => ['nullable', 'integer', 'min:0'],
+            'topics.*.parent_reference' => ['nullable', 'string', 'regex:/^(proposal:0|proposal:[1-9][0-9]*|existing:[1-9][0-9]*)$/', 'max:30'],
+            'topics.*.match_existing_topic_id' => ['nullable', 'integer', 'min:1'],
             'topics.*.sort_order' => ['required', 'integer', 'min:0', 'max:1000'],
         ];
     }

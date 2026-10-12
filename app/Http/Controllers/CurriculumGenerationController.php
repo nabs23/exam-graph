@@ -12,6 +12,7 @@ use App\Models\ProgramFile;
 use App\Models\Subject;
 use App\Services\CurriculumGenerationService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -27,7 +28,7 @@ class CurriculumGenerationController extends Controller
         ]);
     }
 
-    public function create(Program $program, CurriculumGenerationService $service): Response
+    public function create(Request $request, Program $program, CurriculumGenerationService $service): Response
     {
         $files = ProgramFile::query()
             ->where('program_id', $program->id)
@@ -39,9 +40,20 @@ class CurriculumGenerationController extends Controller
             ->orderBy('title')
             ->get(['id', 'program_id', 'subject_id', 'title', 'original_filename', 'mime_type', 'file_type', 'file_size', 'content_hash']);
 
+        $subjects = $program->subjects()
+            ->with(['syllabusTopics' => fn ($query) => $query->orderBy('sort_order')->orderBy('id')->select(['id', 'subject_id', 'parent_id', 'title', 'code', 'description', 'sort_order'])])
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
+        $requestedSubjectId = filter_var($request->query('subject_id'), FILTER_VALIDATE_INT);
+        $initialSubjectId = $requestedSubjectId !== false && $subjects->contains('id', $requestedSubjectId) ? $requestedSubjectId : null;
+        $requestedKind = $request->query('kind');
+        $initialKind = is_string($requestedKind) && CurriculumGenerationKind::tryFrom($requestedKind) !== null ? $requestedKind : null;
+
         return Inertia::render('admin/curriculum-generations/create', [
             'program' => $program->only(['id', 'name', 'code']),
-            'subjects' => $program->subjects()->with('syllabusTopics:id,subject_id,title,code')->orderBy('name')->get(['id', 'name', 'code']),
+            'subjects' => $subjects,
+            'initialKind' => $initialKind,
+            'initialSubjectId' => $initialSubjectId,
             'files' => $files->map(fn (ProgramFile $file): array => [
                 'id' => $file->id,
                 'title' => $file->title,
@@ -78,12 +90,12 @@ class CurriculumGenerationController extends Controller
         $generation = $service->queue(
             $program,
             CurriculumGenerationKind::from($data['kind']),
-            $data['source_file_ids'],
+            $data['source_file_ids'] ?? [],
             $request->user(),
             subject: $subject,
             topic: $topic,
             requestContext: $data['request_context'] ?? null,
-            ungrounded: (bool) $data['ungrounded'],
+            ungrounded: CurriculumGenerationKind::from($data['kind']) === CurriculumGenerationKind::Concepts || (bool) $data['ungrounded'],
             model: $data['model'] ?? null,
         );
 

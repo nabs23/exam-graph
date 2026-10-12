@@ -2,15 +2,15 @@
 
 ## Status and relationship to existing plans
 
-**Status: implementation complete.** Phases 1–4 acceptance checks are complete. Phase 2 retired the subject-file product surface while preserving the legacy model and table for archive compatibility. This plan changes the source-file ownership model and defines a reviewer-controlled workflow for drafting subjects, syllabus topics, and concepts from program files. Program files become the sole supported source-file product surface. Each program file may optionally be associated with one subject.
+**Status: source-library and subject/topic generation implementation complete.** Phases 1–4 acceptance checks are complete for the program-file transition and source-backed subject/topic proposals. Phase 2 retired the subject-file product surface while preserving the legacy model and table for archive compatibility. Concept-generation requirements are now governed by [12-M](12-m-topic-scoped-concept-extraction-development-plan.md), which uses the selected subject's complete topic tree and LLM knowledge without selecting program files. Program files remain the sole supported source-file product surface. Each program file may optionally be associated with one subject.
 
-This plan relaxes the earlier requirement to reproduce the PRC syllabus exactly. The PRC syllabus remains a useful reference source, but generated subjects, topics, and concepts are author proposals. An authorized author decides what becomes canonical curriculum. Citations are optional supporting metadata and are not a generation or publication gate. This does not claim PRC compliance or source verification.
+This plan relaxes the earlier requirement to reproduce the PRC syllabus exactly. The PRC syllabus remains a useful reference source, but generated subjects and topics are author proposals. The separate subject-wide concept workflow in 12-M uses topic context and LLM knowledge, not selected program files. An authorized author decides what becomes canonical curriculum. Citations are optional supporting metadata for source-backed requests and are not a generation or publication gate. This does not claim PRC compliance or source verification.
 
-The plan supersedes the subject-file ownership and mandatory-citation assumptions in [12-D](12-d-curriculum-extraction-subjects-concepts.md) and [12-I](12-i-subject-topic-extraction-implementation-plan.md) for the future author-reviewed curriculum workflow. Preserve the existing program-wide extraction and program-file interfaces. Do not silently remove historical extraction records, source objects, or reviewer decisions. The separate ungrounded generation proposal in [12-J](12-j-ungrounded-curriculum-and-lesson-generation-mvp.md) should be reconciled with this plan before overlapping generation work is implemented.
+The plan supersedes the subject-file ownership assumptions in [12-D](12-d-curriculum-extraction-subjects-concepts.md) and [12-I](12-i-subject-topic-extraction-implementation-plan.md) for the author-reviewed subject/topic workflow. Concept-generation behavior is superseded by 12-M. Preserve the existing program-wide extraction and program-file interfaces. Do not silently remove historical extraction records, source objects, or reviewer decisions. Ungrounded lesson generation in [12-J](12-j-ungrounded-curriculum-and-lesson-generation-mvp.md) remains deferred.
 
 ## Goal
 
-Maintain a single program-owned library of source files and let an author choose relevant files when asking the system to propose curriculum content. The author may generate candidate subjects for a program, topics for a selected subject, and concepts for a selected topic or subject. Reviewers can edit, approve, reject, and publish individual candidates. No generated item becomes canonical without explicit author approval.
+Maintain a single program-owned library of source files and let an author choose relevant files when asking the system to propose subjects or topics. Subject-wide concept generation is specified separately in 12-M. Reviewers can edit, approve, reject, and publish individual candidates. No generated item becomes canonical without explicit author approval.
 
 ## Product decisions
 
@@ -18,9 +18,9 @@ Maintain a single program-owned library of source files and let an author choose
 - **Optional subject association:** Add nullable `subject_id` to program files. A file with no subject is shared program material; a file associated with a subject is relevant to that subject. A selected subject must belong to the file's program.
 - **File type:** Use the existing `App\SubjectFileType` enum for program files; do not introduce a second enum or free-form type field. The supported values are `reviewer_ebook`, `reviewer_notes`, `lecture_material`, `official_reference`, `practice_material`, and `other`. Classify official syllabi, board resolutions, and similar authoritative documents as `official_reference`. Keep the original filename and descriptive metadata separate from this classification.
 - **Source selection:** Generation starts from a program and selects explicit program files. For subject-scoped generation, eligible choices may include files associated with that subject plus unassigned program-wide files. The author sees the file type and optional subject association before selecting sources.
-- **Author proposals:** The AI may propose subjects, hierarchical syllabus topics, and concepts based on selected material and the author's instructions. It may suggest a structure that differs from the PRC outline. It must not label output “official,” “complete,” or “PRC-compliant” unless an author explicitly supplies and approves that assertion outside the generation result.
+- **Author proposals:** The AI may propose subjects and hierarchical syllabus topics based on selected material and the author's instructions. Concept proposals follow 12-M and use the selected subject's complete topic tree with LLM knowledge. Proposals may suggest a structure that differs from the PRC outline. They must not label output “official,” “complete,” or “PRC-compliant.”
 - **Approval is required:** Each proposed subject, topic, and concept remains a private draft until an authorized author reviews and explicitly approves it. Approval can be per item; a collision or quality concern on one item must not discard unrelated accepted items.
-- **Citations are optional:** A proposal can include file/page citations when the model can provide them. Citation absence, uncertainty, or a failed citation check is shown as a review note and does not prevent editing or approval. Never present optional citations as verified evidence unless they have been checked against the selected source snapshot.
+- **Citations are optional for source-backed requests:** A subject or topic proposal can include file/page citations when the model can provide them. Citation absence, uncertainty, or a failed citation check is shown as a review note and does not prevent editing or approval. Concept proposals follow 12-M and have no selected-file citations. Never present optional citations as verified evidence unless they have been checked against the selected source snapshot.
 - **No automatic publishing:** Generation and source selection never write directly to canonical curriculum tables. The application records the author, selected sources, model/provider and prompt version, proposal, review decisions, and approval timestamps.
 - **Scope:** This plan covers source-file ownership and subject/topic/concept proposal workflows. Lesson generation, learner-facing AI, questions, and automatic curriculum publication remain separate decisions.
 
@@ -40,17 +40,17 @@ Historical subject-extraction snapshots and published topic-source citations mus
 
 ### Generation and review records
 
-Use a generation record capable of representing `subjects`, `topics`, and `concepts` proposals. Snapshot the program, optional subject/topic scope, selected file IDs and hashes, requester, provider/model, prompt/schema version, proposal, reviewer edits, decisions, timestamps, and safe failure details. Store optional citations with file/page identity and a verification state such as `unverified`, `valid`, or `invalid`; citation validation informs review but is not a publication precondition.
+Use a generation record capable of representing `subjects`, `topics`, and `concepts` proposals. For source-backed subject/topic requests, snapshot the program, optional subject scope, selected file IDs and hashes, requester, provider/model, prompt/schema version, proposal, reviewer edits, decisions, timestamps, and safe failure details. Concept requests also reuse this record, with the recursive subject/topic `scope_snapshot` defined in 12-M and no selected-file snapshot. Store optional citations only for source-backed requests; citation validation informs review but is not a publication precondition.
 
 Keep draft proposals separate from canonical `subjects`, `syllabus_topics`, and `concepts`. Approval writes only selected, author-edited items and their valid parent relationships. Preserve approved/rejected proposal history according to an explicit retention policy.
 
 ## Generation and approval workflow
 
-1. The author chooses a program and a generation stage: propose subjects, topics for an existing subject, or concepts for an existing subject/topic.
-2. The author selects one or more program files. Subject-scoped requests can use files tagged to that subject and shared program files. Validate program ownership and any subject association.
-3. Snapshot selected file IDs, hashes, titles, types, and optional subject association. Use extracted page text when available; do not require embeddings solely to read source text. If the selected files have no usable text, explain that and allow an ungrounded request only when the author explicitly chooses that mode.
-4. Generate bounded structured candidate content. The model may return optional source/page references. Validate schema, size, unique draft IDs, parent references, and item counts. Validation findings are visible notes; malformed structures that cannot be safely rendered may fail generation.
-5. Present candidates with source selection, optional citations and their verification state, and clear disclosure that generation is not an official-compliance determination. The author edits, reorders, selects, approves, or rejects each item.
+1. For subject and topic proposals, the author chooses a program and generation stage, then selects one or more program files. Subject-scoped requests can use files tagged to that subject and shared program files. Validate program ownership and any subject association.
+2. Snapshot selected file IDs, hashes, titles, types, and optional subject association. Use extracted page text when available; do not require embeddings solely to read source text. If selected files have no usable text, explain that and allow an ungrounded request only when the author explicitly chooses that mode.
+3. For subject-wide concept proposals, follow 12-M: start from one selected subject, include its full recursive topic tree, and use LLM knowledge without program-file selection or RAG.
+4. For source-backed subject/topic requests, generate bounded structured candidate content. The model may return optional source/page references. Validate schema, size, unique draft IDs, parent references, and item counts. Validation findings are visible notes; malformed structures that cannot be safely rendered may fail generation. Concept requests follow 12-M's separate contract.
+5. Present source-backed candidates with selected sources, optional citations and their verification state. Present concept candidates with the subject topic tree and the ungrounded-by-selected-files disclosure defined by 12-M. The author edits, reorders, approves, or rejects each item.
 6. On approval, re-check authorization, target ownership, proposal version, and duplicate conflicts. Surface conflicts for author resolution and permit unrelated items to be approved in the same operation. Write approved items and review audit data transactionally.
 7. Show approved content as author-approved curriculum. Do not imply that optional or unchecked citations establish correctness or official coverage.
 
@@ -118,29 +118,29 @@ Migration `2026_10_11_054054_unify_subject_files_into_program_files` is recorded
 
 ### Phase 3 — Author-reviewed generation
 
-- [x] Implement structured proposal generation for subjects, topics, and concepts from explicitly selected program files. This supersedes 12-J's ungrounded subject/topic proposal scope; lesson generation remains deferred and out of scope.
+- [x] Implement structured, source-backed proposal generation for subjects and topics from explicitly selected program files. Subject-wide concept generation is superseded by 12-M; lesson generation remains deferred and out of scope.
 - [x] Snapshot selected sources and show optional citations with verification notes; do not block a proposal or approval only because citations are missing or invalid.
 - [x] Add item-level edit, reorder, approve, reject, and conflict handling. Approval is explicit and audit-recorded.
 - [x] Check: generated items stay private before approval; only selected approved items enter canonical curriculum; one conflicting item does not block independent items.
 
 ### Phase 4 — End-to-end acceptance
 
-- [x] Demonstrate generation of candidate subjects from shared program files, topics from subject-associated/shared files, and concepts from selected sources.
+- [x] Demonstrate generation of candidate subjects from shared program files and topics from subject-associated/shared files. The historical selected-source concept acceptance below is superseded by 12-M's subject-wide, file-free workflow.
 - [x] Demonstrate author edits and approval for each stage, including a source with no citations and a proposal with citation notes.
 - [x] Confirm content is labeled author-approved and not automatically labeled PRC-compliant or source-verified.
 - [x] Confirm the legacy program-wide extraction and program-file management interfaces remain supported.
 
 #### Phase 4 verification — 2026-10-11
 
-The targeted acceptance run passed: `php artisan test --compact tests/Feature/CurriculumGenerationServiceTest.php tests/Feature/CurriculumGenerationControllerTest.php tests/Feature/CurriculumExtractionTest.php tests/Feature/SourceFilesTest.php` completed with 69 tests and 417 assertions. The generation tests exercise subjects, topics, concepts, citations and citation notes, author edits, approval, and persistence; the legacy feature tests cover program-wide extraction and program-file listing/management. The review screen labels approved items “Author approved” and states that approval does not certify PRC compliance or source correctness. This verifies the application workflow with a fake AI agent; no live-provider call or assessment of real generated-content quality was performed.
+The targeted acceptance run passed: `php artisan test --compact tests/Feature/CurriculumGenerationServiceTest.php tests/Feature/CurriculumGenerationControllerTest.php tests/Feature/CurriculumExtractionTest.php tests/Feature/SourceFilesTest.php` completed with 69 tests and 417 assertions. At that time, generation tests exercised subjects, topics, source-backed concepts, citations and citation notes, author edits, approval, and persistence; the legacy feature tests covered program-wide extraction and program-file listing/management. The source-backed concept mode has since been replaced by 12-M's subject-wide LLM-knowledge mode. This historical run used a fake AI agent and did not assess real generated-content quality.
 
 ## Acceptance criteria
 
 - Program files are the sole supported file-management surface; each file belongs to a program and may optionally be associated with a subject in that program.
-- Authors can select shared program files and subject-associated files as sources for the appropriate generation stage.
+- Authors can select shared program files and subject-associated files for source-backed subject and topic proposals. Concept generation follows 12-M and does not require program files.
 - Source type is recorded in `ProgramFile.file_type`, cast to `SubjectFileType`, and visible during selection and review.
 - Subject, topic, and concept output remains a proposal until an author explicitly approves it.
-- Citations are optional. Missing, unverified, or invalid citations are disclosed as notes and do not alone block review or approval.
+- Citations are optional for source-backed subject/topic proposals. Missing, unverified, or invalid citations are disclosed as notes and do not alone block review or approval. Concept proposals follow 12-M and do not claim file citations.
 - PRC syllabus structure can inform a proposal, but exact PRC specification compliance is not required or claimed by this workflow.
 - Migration preserves file access, text/embedding references, historical extraction records, and topic provenance, or provides a documented archive mapping before subject-file support is removed.
 - Program-wide extraction and program-file management remain intact.
@@ -152,6 +152,7 @@ Automatic or silent publication; claiming official compliance without review; ma
 ## Related documents
 
 - [12-I — Subject Topic Extraction Implementation Plan](12-i-subject-topic-extraction-implementation-plan.md) — existing implementation and historical behavior to reconcile during transition.
-- [12-J — Ungrounded Curriculum and Lesson Generation MVP](12-j-ungrounded-curriculum-and-lesson-generation-mvp.md) — overlaps with author-reviewed ungrounded curriculum proposals and must be consolidated before implementation.
+- [12-M — Subject-Wide Instructional Concept Extraction](12-m-topic-scoped-concept-extraction-development-plan.md) — current scope and implementation plan for concept generation.
+- [12-J — Ungrounded Curriculum and Lesson Generation MVP](12-j-ungrounded-curriculum-and-lesson-generation-mvp.md) — ungrounded lesson generation remains deferred; 12-M separately defines ungrounded-by-program-files concepts.
 - [12-B — Program and Subject File Embedding Inputs](12-b-source-documents-content-mapping.md) — existing page-text and embedding identity model to adapt for program-owned files.
 - [11 — Program and Subject Files S3 Development Plan](11-program-subject-files-s3-development-plan.md) — current two-scope file library plan; revise its subject-file assumptions when implementing this plan.

@@ -2,7 +2,7 @@
 
 ## Status and relationship to existing plans
 
-**Status: superseded for subject and topic generation; lesson generation remains deferred.** Plan [12-K](12-k-program-source-library-and-reviewed-curriculum-generation-plan.md) replaces this plan's ungrounded subject and topic proposal workflow with author-reviewed proposals based on explicitly selected program files, with optional citations. Lesson generation remains outside 12-K and is not authorized by this plan. Do not implement the workflows below unless a future product decision reconciles lesson generation with the normative grounding requirements.
+**Status: superseded for subject and topic generation; ungrounded lesson generation remains deferred.** Plan [12-K](12-k-program-source-library-and-reviewed-curriculum-generation-plan.md) governs source-backed subject and topic proposals. Plan [12-M](12-m-topic-scoped-concept-extraction-development-plan.md) separately governs subject-wide concept proposals based on the complete recursive topic tree and LLM knowledge, without selected program files or RAG. Lesson generation remains outside both plans and is not authorized here. Do not implement lesson generation unless a future product decision reconciles it with the normative grounding requirements.
 
 This is a temporary product-scope exception to the source-grounding principles in [01 — Product Definition](01-final-project-description-product-definition.md), [02 — Architecture Decisions](02-final-decisions-architecture-decision-register.md), [03 — Requirements](03-consolidated-software-requirements-specification.md), and [04 — Architecture](04-architecture-curriculum-graph-rag-design-guide.md). It does not change the broader target architecture. Before implementation, update those normative documents to say grounding is deferred for this MVP and prohibit unreviewed learner-facing instructional content. Keep [12-D](12-d-curriculum-extraction-subjects-concepts.md) and [12-I](12-i-subject-topic-extraction-implementation-plan.md) as the separate source-backed syllabus topic-extraction workflow; this plan does not replace or weaken its citation contract.
 
@@ -22,7 +22,7 @@ The MVP tests whether AI-assisted content setup and a basic lesson-consumption f
 - **Human authority:** Only reviewers create or publish canonical curriculum and lesson records. Approval confirms editorial review, not factual correctness or official syllabus alignment.
 - **Pilot scope:** Begin with one program and a bounded number of subjects, topics, and lessons. Set concrete limits before enabling requests; reject over-limit requests before queueing.
 - **Learner access:** Learners can access only published lessons and approved curriculum context. Chat, tutoring, generated exams, high-stakes questions, and autonomous publication are excluded.
-- **Existing workflows:** Do not alter program-wide extraction or subject-scoped source-backed topic extraction. Do not repurpose their records or provenance fields for ungrounded output.
+- **Existing workflows:** Do not alter program-wide extraction or subject-scoped source-backed topic extraction. The 12-M concept workflow is an explicit, separate ungrounded-by-program-files exception that reuses `CurriculumGeneration` with a recursive scope snapshot; it does not add fabricated source provenance. Do not use this plan to repurpose the subject-topic extraction records or their citation fields.
 
 ## User workflow
 

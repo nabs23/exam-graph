@@ -21,7 +21,7 @@ class CurriculumGeneration extends Model
     protected $fillable = [
         'program_id', 'subject_id', 'syllabus_topic_id', 'requested_by', 'reviewed_by', 'kind', 'status',
         'request_context', 'ungrounded_requested', 'request_hash', 'source_hash', 'source_files', 'provider', 'model', 'prompt_version',
-        'schema_version', 'proposal', 'reviewed_proposal', 'error_code', 'correlation_id', 'generated_at', 'reviewed_at',
+        'schema_version', 'scope_snapshot', 'proposal', 'reviewed_proposal', 'error_code', 'correlation_id', 'generated_at', 'reviewed_at',
     ];
 
     protected function casts(): array
@@ -31,6 +31,7 @@ class CurriculumGeneration extends Model
             'status' => CurriculumGenerationStatus::class,
             'ungrounded_requested' => 'boolean',
             'source_files' => 'array',
+            'scope_snapshot' => 'array',
             'proposal' => 'array',
             'reviewed_proposal' => 'array',
             'generated_at' => 'datetime',

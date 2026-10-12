@@ -8,12 +8,21 @@ Use this document as the ongoing handoff and working note for subject source fil
 
 Add dated notes here. Keep the newest entry first.
 
+### 2026-10-11 — Recheck subject-wide concept and topic-extraction plans
+
+- 12-M subject-wide concept generation phases 1–3 and Phase 4 workflow checks are verified. Tests cover recursive snapshots through multiple nested levels and separate roots, no-file requests, per-item author approval, scope ownership, duplicate conflicts, and stale-topic rejection; the UI discloses LLM-knowledge generation without selected program files. Latest validation: 216 tests / 1,147 assertions and Pint pass. FAR (subject ID 1) is the development evaluation scope; the local database currently has 47 topics and 26 concepts across 12 topics, leaving 35 topics without concepts. Those concepts are only a partial set, not an author-reviewed reference fixture. A proposed metric rubric is recorded in 12-M but awaits product-owner/SME approval. The author-reviewed full-tree reference set and live-model quality evaluation remain open.
+- Local development now enables `AI_CURRICULUM_GENERATION_ENABLED=true` with OpenAI model `gpt-6.1-sol` in the ignored `.env`; `CurriculumGenerationService::unavailableReason()` returns `null`. Config's default remains disabled. No concept-generation provider call has been made; wait for the reference set and rubric decision before the evaluation pilot.
+- The approved PRC syllabus source is already present in the local database, and a live extraction record (`subject_topic_extractions.id=3`) records OpenAI `gpt-6-luna`, prompt `subject-topics-v1`, and the source hash `d11428585fc47e456fe5b63ab089f9799719735ff1f4aac2b243a50dac42048b`.
+- The first 12-I live extraction (`id=3`) proposed the branch but published zero topics because existing `4.0` and `4.2` conflicts caused its descendants to be skipped. The review flow now supports an explicit exact-match selection and existing-topic parent anchors without changing existing topic rows.
+- 12-I source-backed development acceptance is now complete in live record `id=5`: OpenAI `gpt-6-luna`, `subject-topics-v1`, file hash `d11428585fc47e456fe5b63ab089f9799719735ff1f4aac2b243a50dac42048b`; all seven target nodes were published or linked, with verified original PDF page 4 mappings (printed page 2). Reviewer corrections fixed the parent chain, matched existing IDs 114/116, added five rows (IDs 369–373), and skipped none. Details are recorded in [12-I](12-i-subject-topic-extraction-implementation-plan.md).
+- Next: complete 12-M's author-reviewed reference set and evaluation-threshold decision before its Phase 4 pilot. The existing FAR concepts remain only a partial reference set for the full subject tree.
+
 ### 2026-10-11 — Approve initial development source set
 
 - Decision: use the official PRC-hosted LECPA syllabus effective October 2022 as the sole required development acceptance source. The target is the seven-node FAR PPE branch on printed page 2, from `4.0` through `4.2.5.1.3`; the exact outline and acceptance rules are recorded in [12-I](12-i-subject-topic-extraction-implementation-plan.md).
 - Scope: no supporting questionnaire, reviewer textbook, or notes are required to complete this feature. The existing “Main Reviewer” Hospitality PDF is excluded as irrelevant to FAR. “Accounting Succinctly” is deferred until it belongs to the selected FAR subject and has usable page text.
 - Decision: source-rights/provider-terms, retention, budget, and broader compliance review are production-readiness work for later. They do not block development completion. Keep production default-off; local/test may explicitly enable the feature.
-- Remaining development acceptance: run the approved source through request, reviewer correction, and publication, then record source hash, model/prompt version, edits, and final page mappings. No source has yet been uploaded to the app or sent to a provider.
+- The approved-source development acceptance was completed in record `subject_topic_extractions.id=5`, recorded above. The earlier failed zero-topic result (`id=3`) remains in the database as its original audit history.
 
 ### 2026-10-11 — Verify extraction-route fix and identify pilot-source candidate
 
@@ -81,7 +90,8 @@ Use [12-I — Subject Topic Extraction Implementation Plan](12-i-subject-topic-e
 ## Next product work
 
 - [ ] Decide whether source versioning is required before supporting revisions to published subject topics.
-- [ ] Design extraction of instructional concepts from approved subjects and syllabus topics. Concepts must remain separate from subject-source topic records and require independent reviewer approval.
+- [x] Design extraction of instructional concepts from approved subject topics. Concepts remain separate from syllabus-topic records and require independent author approval; see [12-M](12-m-topic-scoped-concept-extraction-development-plan.md).
+- [x] Implement phases 1–3 of [12-M — Subject-Wide Instructional Concept Extraction](12-m-topic-scoped-concept-extraction-development-plan.md); its reference set, evaluation, and rollout gates remain open.
 - [ ] Plan source-grounded lesson drafts after concept extraction is established. See [12-E](12-e-grounded-lesson-drafts.md).
 - [ ] Define retrieval, evaluation, governance, and rollout requirements for later learner-facing AI features. See [12-F](12-f-learner-tutor-practice-drafts.md) and [12-G](12-g-ai-governance-evaluation-rollout.md).
 

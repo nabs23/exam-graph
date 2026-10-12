@@ -5,6 +5,7 @@ use App\Models\CurriculumGeneration;
 use App\Models\Program;
 use App\Models\ProgramFile;
 use App\Models\Subject;
+use App\Models\SyllabusTopic;
 use App\Models\User;
 use Illuminate\Support\Facades\Queue;
 
@@ -47,6 +48,60 @@ test('admins can open the generation workflow and queue a scoped proposal', func
         'status' => 'queued',
     ]);
     Queue::assertPushed(GenerateCurriculumProposal::class);
+});
+
+test('concept requests start from a subject and queue without program files', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    $rootTopic = SyllabusTopic::factory()->for($subject)->create(['title' => 'Root topic', 'sort_order' => 0]);
+    SyllabusTopic::factory()->for($subject)->create([
+        'title' => 'Nested topic',
+        'parent_id' => $rootTopic->id,
+        'sort_order' => 1,
+    ]);
+    $admin = User::factory()->admin()->create();
+
+    $this->actingAs($admin)
+        ->get(route('programs.curriculum-generations.create', $program).'?kind=concepts&subject_id='.$subject->id)
+        ->assertInertia(fn ($page) => $page
+            ->component('admin/curriculum-generations/create')
+            ->where('initialKind', 'concepts')
+            ->where('initialSubjectId', $subject->id)
+            ->where('subjects.0.syllabus_topics.1.parent_id', $rootTopic->id));
+
+    $this->actingAs($admin)
+        ->post(route('programs.curriculum-generations.store', $program), [
+            'kind' => 'concepts',
+            'subject_id' => $subject->id,
+            'ungrounded' => true,
+        ])
+        ->assertRedirect();
+
+    $generation = CurriculumGeneration::query()->where('subject_id', $subject->id)->firstOrFail();
+    expect($generation->source_files)->toBe([])
+        ->and($generation->scope_snapshot['topics'])->toHaveCount(2)
+        ->and($generation->status->value)->toBe('queued');
+    Queue::assertPushed(GenerateCurriculumProposal::class, fn (GenerateCurriculumProposal $job): bool => $job->generationId === $generation->id);
+});
+
+test('concept requests reject a subject from another program without queueing a generation', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    $program = Program::factory()->create();
+    $otherProgram = Program::factory()->create();
+    $foreignSubject = Subject::factory()->for($otherProgram)->create();
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->from(route('programs.curriculum-generations.create', $program))
+        ->post(route('programs.curriculum-generations.store', $program), [
+            'kind' => 'concepts',
+            'subject_id' => $foreignSubject->id,
+            'ungrounded' => true,
+        ])
+        ->assertSessionHasErrors('subject_id');
+
+    expect(CurriculumGeneration::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
 });
 
 test('generation detail binding is scoped to the route program', function () {

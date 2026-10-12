@@ -21,7 +21,8 @@ This directory contains the product, curriculum, architecture, requirements, and
 15. [Curriculum extraction handoff checklist](next-tasks-handoff.md)
 16. [Subject topic extraction implementation plan](12-i-subject-topic-extraction-implementation-plan.md), which turns 12-D into a scoped route, reviewer UI, Laravel AI agent, and durable topic-to-source-page mapping.
 17. [Ungrounded curriculum and lesson generation MVP](12-j-ungrounded-curriculum-and-lesson-generation-mvp.md), a proposed reviewer-controlled plan for LLM-generated subjects, topic hierarchies, and lessons without source grounding.
-18. [Program source library and author-reviewed curriculum generation](12-k-program-source-library-and-reviewed-curriculum-generation-plan.md), a proposed transition to program-owned files with optional subject association and explicitly approved subject, topic, and concept proposals.
+18. [Program source library and author-reviewed curriculum generation](12-k-program-source-library-and-reviewed-curriculum-generation-plan.md), the completed transition to program-owned files with optional subject association and explicitly approved subject, topic, and concept proposals.
+19. [Subject-wide instructional concept extraction](12-m-topic-scoped-concept-extraction-development-plan.md), the development plan for drafting author-approved concepts across one subject's complete recursive topic tree using LLM knowledge.
 
 ## Directory Contents
 
@@ -54,10 +55,11 @@ docs/
 | Planning | [12-E — Grounded Lesson Drafts](12-e-grounded-lesson-drafts.md) | Deferred notes for future evidence-grounded lesson generation. |
 | Planning | [12-F — Learner Tutor and Practice Drafts](12-f-learner-tutor-practice-drafts.md) | Deferred notes for future learner and practice features. |
 | Planning | [12-G — Embedding MVP Governance](12-g-ai-governance-evaluation-rollout.md) | Evaluation, security/privacy review, and rollout gates for file embeddings only. |
-| Planning | [12-H — Advanced AI Features Roadmap](12-h-advanced-ai-features-roadmap.md) | First advanced priority: subject-scoped RAG that drafts structured concepts for reviewer approval. |
+| Planning | [12-H — Advanced AI Features Roadmap](12-h-advanced-ai-features-roadmap.md) | Optional future file-grounded RAG and advanced AI features; current subject-wide concept drafting is defined in 12-M. |
 | Planning | [12-I — Subject Topic Extraction Implementation Plan](12-i-subject-topic-extraction-implementation-plan.md) | Implements the 12-D subject-scoped topic extraction design, including the subject tab, dedicated route, structured-output agent, reviewer workflow, and persistent source-page mapping. |
 | Planning | [12-J — Ungrounded Curriculum and Lesson Generation MVP](12-j-ungrounded-curriculum-and-lesson-generation-mvp.md) | Proposed plan for bounded LLM-generated subjects, instructional topic hierarchies, and lesson drafts with mandatory reviewer approval and no source-grounding claims. |
-| Planning | [12-K — Program Source Library and Author-Reviewed Curriculum Generation](12-k-program-source-library-and-reviewed-curriculum-generation-plan.md) | Proposes a single program-file library with optional subject association and author-reviewed subject, topic, and concept generation; citations are optional. |
+| Planning | [12-K — Program Source Library and Author-Reviewed Curriculum Generation](12-k-program-source-library-and-reviewed-curriculum-generation-plan.md) | Records the completed program-file transition and source-backed subject/topic proposal workflow; concept generation is governed by 12-M. |
+| Planning | [12-M — Subject-Wide Instructional Concept Extraction](12-m-topic-scoped-concept-extraction-development-plan.md) | Defines file-free LLM concept proposals across a selected subject's complete recursive topic tree, snapshot validation, per-item approval, and evaluation gates. |
 | Operations | [13 — CI/CD Setup Guide](13-ci-cd-setup-guide.md) | GitHub Actions, Docker Hub, and Coolify setup for testing and deployment. |
 | Planning | [Curriculum Extraction Handoff Checklist](next-tasks-handoff.md) | Records the completed workflow, environment verification steps, known operational follow-ups, and next product decisions. |
 

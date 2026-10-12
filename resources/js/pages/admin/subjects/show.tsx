@@ -7,6 +7,7 @@ import URLTabsContainer from '@/components/url-tabs-container';
 import type { TabItem } from '@/components/url-tabs-container';
 import { subjects } from '@/lib/curriculum-routes';
 import { subjectTopics } from '@/lib/curriculum-routes';
+import generations from '@/routes/programs/curriculum-generations';
 
 export default function Subject({ subject, programFiles, topicExtractionSummary, topicExtractionEnabled, topicExtractionUnavailableReason }: {
     subject: { id: number; name: string; code: string | null; program: { id: number }; syllabus_topics: SubjectSyllabusTopic[]; concepts: SubjectConcept[] };
@@ -47,6 +48,7 @@ export default function Subject({ subject, programFiles, topicExtractionSummary,
                     <h1 className="text-3xl font-semibold tracking-tight">{subject.name}</h1>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    <Link href={generations.create(subject.program.id, { query: { kind: 'concepts', subject_id: subject.id } })} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Draft concepts</Link>
                     <Link href={subjectTopics.index(subject)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Manage syllabus topics</Link>
                     <Link href={subjects.edit(subject)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Edit subject</Link>
                 </div>

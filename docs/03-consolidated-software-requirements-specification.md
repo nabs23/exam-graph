@@ -83,6 +83,9 @@ The system shall permit further prerequisite decomposition until a practical zer
 ### FR-CUR-006 — Navigation
 Learners shall be able to see the current node, understand its parent/dependent objective, view recommended prerequisites, manually choose a deeper prerequisite path when permitted, and return to the original objective.
 
+### FR-CUR-007 — Subject-Wide Concept Authoring Proposals
+An authorized content author shall be able to request private concept proposals for one existing subject using the complete recursive syllabus-topic tree as scope context and LLM knowledge. The workflow shall not require selected program files or RAG, shall map each proposal to an existing topic in that subject, and shall create canonical concepts only after explicit per-item author approval. The interface shall disclose that proposals are not grounded in selected program files and do not certify factual correctness, official coverage, or PRC compliance.
+
 ## 5. Source Knowledge Requirements
 
 ### FR-KB-001 — Source Registry
@@ -105,6 +108,8 @@ Chunks shall be linkable to one or more curriculum nodes. Mapping may be manual,
 
 ### FR-KB-007 — Provenance
 Every retrieved or generated learning asset shall be capable of retaining references to the source chunks used to create it.
+
+This provenance requirement applies to file-grounded learning assets. FR-CUR-007 concept proposals are an explicit authoring exception: their provenance is the recorded subject/topic scope snapshot and generation metadata, not source-file citations.
 
 ## 6. Diagnostic and Placement Requirements
 
@@ -266,4 +271,3 @@ A release demonstrates the central product concept when:
 7. the system advances the learner upward;
 8. the learner is returned to the original board-level topic;
 9. the system records the new assessment evidence and updated mastery.
-

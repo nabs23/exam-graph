@@ -68,7 +68,7 @@ The content pipeline is:
 
 **Source document → extraction → cleaning → semantic chunking → metadata → embedding → taxonomy linkage → retrieval → AI-assisted lesson or assessment generation**
 
-AI-generated content should be grounded in retrieved source material rather than generated from unrestricted model memory whenever the feature is presenting instructional content as part of the formal reviewer.
+AI-generated lessons, assessments, and learner-facing instructional responses should be grounded in retrieved source material rather than unrestricted model memory. The authoring workflow in [12-M](12-m-topic-scoped-concept-extraction-development-plan.md) is a bounded exception: it proposes app-authored concepts from one selected subject's complete recursive syllabus-topic tree and LLM knowledge, without selected-file grounding. Those proposals remain private until author approval and must not claim factual correctness, official completeness, or PRC compliance.
 
 The source corpus remains the authority. AI is primarily an orchestration, explanation, adaptation, and generation layer over that corpus.
 
@@ -156,4 +156,3 @@ Native mobile applications, broad social/community features, unrelated classroom
 ## 10. Definition of Success
 
 The product succeeds when it can take a learner who fails an advanced board-level topic, identify the likely prerequisite gap, guide the learner through an evidence-grounded foundational path, verify mastery, and return the learner to the original board-level objective with measurable improvement.
-

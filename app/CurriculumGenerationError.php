@@ -9,6 +9,8 @@ enum CurriculumGenerationError: string
     case SourceChanged = 'source_changed';
     case SourceUnavailable = 'source_unavailable';
     case SourceLimitExceeded = 'source_limit_exceeded';
+    case ScopeChanged = 'scope_changed';
+    case ScopeLimitExceeded = 'scope_limit_exceeded';
     case InvalidProposal = 'invalid_proposal';
     case ProviderFailed = 'provider_failed';
 
@@ -20,6 +22,8 @@ enum CurriculumGenerationError: string
             self::SourceChanged => 'A selected source changed after the proposal was requested. Start a new proposal.',
             self::SourceUnavailable => 'A selected source could not be read. Check the file and try again.',
             self::SourceLimitExceeded => 'The selected sources exceed the configured page or text limits.',
+            self::ScopeChanged => 'The subject topic tree changed after this proposal was generated. Generate a new proposal against the current tree.',
+            self::ScopeLimitExceeded => 'The subject topic tree exceeds the configured generation limit.',
             self::InvalidProposal => 'The generated proposal could not be safely reviewed.',
             self::ProviderFailed => 'The curriculum proposal could not be generated. Try again later.',
         };

@@ -360,59 +360,218 @@ test('topic proposals preserve reviewed hierarchy when approved', function () {
         ->and($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Approved);
 });
 
-test('grounded concept proposals use selected subject sources, allow missing citations, and approve only selected items', function () {
+test('subject-wide concept proposals use the complete topic tree and keep item decisions independent', function () {
     Queue::fake([GenerateCurriculumProposal::class]);
-    Storage::fake('s3');
-    Process::fake([
-        '*' => Process::sequence()
-            ->push(Process::result("Pages:          1\n"))
-            ->push(Process::result("Current assets are resources expected to provide future economic benefits.\f")),
-    ]);
     $program = Program::factory()->create();
     $subject = Subject::factory()->for($program)->create();
-    $topic = SyllabusTopic::factory()->for($subject)->create();
-    $file = ProgramFile::factory()->for($program)->create([
-        'subject_id' => $subject->id,
-        'storage_key' => 'program-files/'.$program->id.'/concept-source.pdf',
-        'content_hash' => null,
+    $rootTopic = SyllabusTopic::factory()->for($subject)->create([
+        'code' => 'ROOT',
+        'title' => 'Root topic',
+        'description' => 'Root description.',
+        'parent_id' => null,
+        'sort_order' => 0,
     ]);
-    Storage::disk('s3')->put($file->storage_key, '%PDF-1.7 concepts');
-    $file->forceFill(['file_size' => Storage::disk('s3')->size($file->storage_key)])->save();
+    $nestedTopic = SyllabusTopic::factory()->for($subject)->create([
+        'code' => 'NESTED',
+        'title' => 'Nested topic',
+        'parent_id' => $rootTopic->id,
+        'sort_order' => 0,
+    ]);
+    $deepTopic = SyllabusTopic::factory()->for($subject)->create([
+        'code' => 'DEEP',
+        'title' => 'Deeply nested topic',
+        'parent_id' => $nestedTopic->id,
+        'sort_order' => 0,
+    ]);
+    $siblingTopic = SyllabusTopic::factory()->for($subject)->create([
+        'code' => 'SIBLING',
+        'title' => 'Sibling topic',
+        'parent_id' => null,
+        'sort_order' => 1,
+    ]);
+    $otherSubject = Subject::factory()->for($program)->create();
+    $foreignTopic = SyllabusTopic::factory()->for($otherSubject)->create(['title' => 'Out of scope topic']);
+    $existingConcept = Concept::factory()->for($subject)->for($rootTopic, 'syllabusTopic')->create([
+        'code' => 'EXISTING',
+        'title' => 'Existing anchor concept',
+    ]);
     CurriculumProposalGenerator::fake([[
         'items' => [
-            ['draft_id' => 'concept-keep', 'title' => 'Current assets', 'code' => 'CA', 'description' => null, 'parent_draft_id' => null, 'sort_order' => 0, 'citations' => [['source_file_id' => $file->id, 'page_number' => 9]]],
-            ['draft_id' => 'concept-skip', 'title' => 'Current liabilities', 'code' => 'CL', 'description' => null, 'parent_draft_id' => null, 'sort_order' => 1, 'citations' => [], 'citation_status' => 'unverified', 'review_notes' => []],
+            ['draft_id' => 'concept-mapped', 'title' => 'Mapped concept', 'code' => 'APP-01', 'description' => 'A teachable idea.', 'parent_draft_id' => null, 'syllabus_topic_id' => $deepTopic->id],
+            ['draft_id' => 'concept-invalid-topic', 'title' => 'Unmapped concept', 'code' => 'APP-02', 'description' => null, 'parent_draft_id' => null, 'syllabus_topic_id' => $foreignTopic->id],
+            ['draft_id' => 'concept-duplicate', 'title' => 'Existing anchor concept', 'code' => 'EXISTING', 'description' => null, 'parent_draft_id' => null, 'syllabus_topic_id' => $rootTopic->id],
+            ['draft_id' => 'concept-independent', 'title' => 'Independent concept', 'code' => 'APP-03', 'description' => null, 'parent_draft_id' => null, 'syllabus_topic_id' => $siblingTopic->id],
         ],
     ]]);
+
     $generation = app(CurriculumGenerationService::class)->queue(
         $program,
         CurriculumGenerationKind::Concepts,
-        [$file->id],
+        [],
         User::factory()->admin()->create(),
         subject: $subject,
-        topic: $topic,
+        requestContext: 'Create concise instructional concepts.',
     );
+
+    expect($generation->scope_snapshot['topics'])->toHaveCount(4)
+        ->and($generation->scope_snapshot['topics'][1]['path'][0]['id'])->toBe($rootTopic->id)
+        ->and($generation->scope_snapshot['topics'][2]['path'][2]['id'])->toBe($deepTopic->id)
+        ->and($generation->source_files)->toBe([])
+        ->and($generation->ungrounded_requested)->toBeTrue();
+    Queue::assertPushed(GenerateCurriculumProposal::class, fn (GenerateCurriculumProposal $job): bool => $job->generationId === $generation->id);
+
     $service = app(CurriculumGenerationService::class);
     $service->generate($generation->id);
 
     expect($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Reviewing)
-        ->and($generation->fresh()->source_files[0]['subject_id'])->toBe($subject->id)
-        ->and($generation->fresh()->proposal['items'][0]['citation_status'])->toBe('invalid')
-        ->and($generation->fresh()->proposal['items'][0]['review_notes'])->not->toBeEmpty()
-        ->and($generation->fresh()->proposal['items'][1]['citation_status'])->toBe('unverified')
-        ->and(Concept::query()->where('subject_id', $subject->id)->exists())->toBeFalse();
-    CurriculumProposalGenerator::assertPrompted(fn ($prompt): bool => $prompt->contains('Current assets are resources expected to provide future economic benefits.'));
+        ->and($generation->fresh()->source_files)->toBe([])
+        ->and($generation->fresh()->proposal['items'][0]['syllabus_topic_id'])->toBe($deepTopic->id)
+        ->and($generation->fresh()->proposal['items'][1]['syllabus_topic_id'])->toBeNull()
+        ->and($generation->fresh()->proposal['items'][1]['review_notes'])->not->toBeEmpty()
+        ->and(Concept::query()->where('subject_id', $subject->id)->count())->toBe(1);
+    CurriculumProposalGenerator::assertPrompted(fn ($prompt): bool => $prompt->contains('Root topic')
+        && $prompt->contains('Nested topic')
+        && $prompt->contains('Deeply nested topic')
+        && $prompt->contains('Sibling topic')
+        && $prompt->contains('Existing anchor concept'));
 
     $proposalHash = hash('sha256', json_encode($generation->fresh()->proposal, JSON_THROW_ON_ERROR));
+    $reviewer = User::factory()->admin()->create();
+    $service->review($generation->fresh(), $proposalHash, [
+        ['draft_id' => 'concept-mapped', 'include' => true, 'title' => 'Mapped concept', 'code' => 'APP-01', 'description' => 'Edited description.', 'sort_order' => 0, 'syllabus_topic_id' => $siblingTopic->id],
+        ['draft_id' => 'concept-invalid-topic', 'include' => false, 'title' => 'Unmapped concept', 'code' => 'APP-02', 'description' => '', 'sort_order' => 1],
+        ['draft_id' => 'concept-duplicate', 'include' => true, 'title' => 'Existing anchor concept', 'code' => 'EXISTING', 'description' => '', 'sort_order' => 2, 'syllabus_topic_id' => $rootTopic->id],
+        ['draft_id' => 'concept-independent', 'include' => true, 'title' => 'Independent concept', 'code' => 'APP-03', 'description' => '', 'sort_order' => 3, 'syllabus_topic_id' => $siblingTopic->id],
+    ], $reviewer);
+
+    $mappedConcept = Concept::query()->where('subject_id', $subject->id)->where('code', 'APP-01')->firstOrFail();
+    expect($mappedConcept->syllabus_topic_id)->toBe($siblingTopic->id)
+        ->and(Concept::query()->where('subject_id', $subject->id)->where('code', 'APP-02')->exists())->toBeFalse()
+        ->and(Concept::query()->where('subject_id', $subject->id)->where('code', 'APP-03')->exists())->toBeTrue()
+        ->and($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Reviewing)
+        ->and($generation->fresh()->reviewed_proposal['items'][1]['decision'])->toBe('rejected')
+        ->and($generation->fresh()->reviewed_proposal['items'][1]['review_notes'])->not->toBeEmpty()
+        ->and($generation->fresh()->reviewed_proposal['items'][2]['decision'])->toBe('conflict')
+        ->and($generation->fresh()->reviewed_proposal['items'][3]['decision'])->toBe('approved');
 
     $service->review($generation->fresh(), $proposalHash, [
-        ['draft_id' => 'concept-keep', 'include' => true, 'title' => 'Current assets', 'code' => 'CA', 'description' => '', 'sort_order' => 0],
-        ['draft_id' => 'concept-skip', 'include' => false, 'title' => 'Current liabilities', 'code' => 'CL', 'description' => '', 'sort_order' => 1],
-    ], User::factory()->admin()->create());
+        ['draft_id' => 'concept-mapped', 'include' => true, 'title' => 'Mapped concept', 'code' => 'APP-01', 'description' => 'Edited description.', 'sort_order' => 0, 'syllabus_topic_id' => $siblingTopic->id],
+        ['draft_id' => 'concept-invalid-topic', 'include' => false, 'title' => 'Unmapped concept', 'code' => 'APP-02', 'description' => '', 'sort_order' => 1],
+        ['draft_id' => 'concept-duplicate', 'include' => true, 'title' => 'Resolved concept', 'code' => 'APP-04', 'description' => '', 'sort_order' => 2, 'syllabus_topic_id' => $rootTopic->id],
+        ['draft_id' => 'concept-independent', 'include' => true, 'title' => 'Independent concept', 'code' => 'APP-03', 'description' => '', 'sort_order' => 3, 'syllabus_topic_id' => $siblingTopic->id],
+    ], $reviewer);
 
-    $concept = Concept::query()->where('subject_id', $subject->id)->where('code', 'CA')->firstOrFail();
-    expect($concept->syllabus_topic_id)->toBe($topic->id)
-        ->and(Concept::query()->where('subject_id', $subject->id)->where('code', 'CL')->exists())->toBeFalse()
-        ->and($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Approved)
-        ->and($generation->fresh()->reviewed_proposal['items'][1]['decision'])->toBe('rejected');
+    expect($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Approved)
+        ->and(Concept::query()->where('subject_id', $subject->id)->where('code', 'APP-04')->value('syllabus_topic_id'))->toBe($rootTopic->id)
+        ->and(Concept::query()->where('subject_id', $subject->id)->count())->toBe(4);
+});
+
+test('concept proposals become stale when the subject topic tree changes before review', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    $topic = SyllabusTopic::factory()->for($subject)->create(['title' => 'Original topic']);
+    CurriculumProposalGenerator::fake([[
+        'items' => [[
+            'draft_id' => 'concept-stale',
+            'title' => 'Stale concept',
+            'code' => 'APP-STALE',
+            'description' => null,
+            'parent_draft_id' => null,
+            'syllabus_topic_id' => $topic->id,
+        ]],
+    ]]);
+    $generation = app(CurriculumGenerationService::class)->queue(
+        $program,
+        CurriculumGenerationKind::Concepts,
+        [],
+        User::factory()->admin()->create(),
+        subject: $subject,
+    );
+    $service = app(CurriculumGenerationService::class);
+    $service->generate($generation->id);
+    $originalRequestHash = $generation->request_hash;
+    $topic->update(['title' => 'Changed topic']);
+    $regeneratedRequest = $service->queue(
+        $program,
+        CurriculumGenerationKind::Concepts,
+        [],
+        $generation->requester()->firstOrFail(),
+        subject: $subject,
+    );
+
+    expect($regeneratedRequest->request_hash)->not->toBe($originalRequestHash);
+
+    $service->review($generation->fresh(), hash('sha256', json_encode($generation->fresh()->proposal, JSON_THROW_ON_ERROR)), [[
+        'draft_id' => 'concept-stale',
+        'include' => true,
+        'title' => 'Stale concept',
+        'code' => 'APP-STALE',
+        'description' => '',
+        'sort_order' => 0,
+        'syllabus_topic_id' => $topic->id,
+    ]], User::factory()->admin()->create());
+
+    expect($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Stale)
+        ->and($generation->fresh()->error_code)->toBe('scope_changed')
+        ->and(Concept::query()->where('subject_id', $subject->id)->exists())->toBeFalse();
+});
+
+test('concept requests reject a topic tree that exceeds configured input bounds', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    config(['ai.curriculum_generation.max_topics' => 1]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    SyllabusTopic::factory()->for($subject)->count(2)->create();
+
+    expect(fn () => app(CurriculumGenerationService::class)->queue(
+        $program,
+        CurriculumGenerationKind::Concepts,
+        [],
+        User::factory()->admin()->create(),
+        subject: $subject,
+    ))->toThrow(ValidationException::class);
+
+    expect(CurriculumGeneration::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
+});
+
+test('concept requests reject a topic snapshot that exceeds the configured character limit', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    config(['ai.curriculum_generation.max_characters' => 32]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    SyllabusTopic::factory()->for($subject)->create(['title' => 'A detailed topic title that exceeds the limit']);
+
+    expect(fn () => app(CurriculumGenerationService::class)->queue(
+        $program,
+        CurriculumGenerationKind::Concepts,
+        [],
+        User::factory()->admin()->create(),
+        subject: $subject,
+    ))->toThrow(ValidationException::class);
+
+    expect(CurriculumGeneration::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
+});
+
+test('malformed subject-wide concept output fails without creating canonical concepts', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    SyllabusTopic::factory()->for($subject)->create();
+    CurriculumProposalGenerator::fake([['items' => []]]);
+    $generation = app(CurriculumGenerationService::class)->queue(
+        $program,
+        CurriculumGenerationKind::Concepts,
+        [],
+        User::factory()->admin()->create(),
+        subject: $subject,
+    );
+
+    app(CurriculumGenerationService::class)->generate($generation->id);
+
+    expect($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Failed)
+        ->and($generation->fresh()->error_code)->toBe('invalid_proposal')
+        ->and(Concept::query()->where('subject_id', $subject->id)->exists())->toBeFalse();
 });

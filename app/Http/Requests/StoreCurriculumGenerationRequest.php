@@ -29,6 +29,7 @@ class StoreCurriculumGenerationRequest extends FormRequest
         $program = $this->route('program');
         $kind = $this->input('kind');
         $requiresSubject = in_array($kind, [CurriculumGenerationKind::Topics->value, CurriculumGenerationKind::Concepts->value], true);
+        $isConceptGeneration = $kind === CurriculumGenerationKind::Concepts->value;
         $topicSubjectId = $this->input('subject_id');
         $models = array_values(array_unique(array_filter([
             ...config('ai.curriculum_generation.models', []),
@@ -44,11 +45,12 @@ class StoreCurriculumGenerationRequest extends FormRequest
                 Rule::exists('subjects', 'id')->where('program_id', $program->id),
             ],
             'syllabus_topic_id' => [
+                Rule::prohibitedIf($isConceptGeneration),
                 'nullable',
                 'integer',
                 Rule::exists('syllabus_topics', 'id')->where('subject_id', $topicSubjectId),
             ],
-            'source_file_ids' => ['required', 'array', 'min:1', 'max:'.max(1, (int) config('ai.curriculum_generation.max_files', 10))],
+            'source_file_ids' => [Rule::prohibitedIf($isConceptGeneration), Rule::requiredIf(! $isConceptGeneration), 'nullable', 'array', 'min:1', 'max:'.max(1, (int) config('ai.curriculum_generation.max_files', 10))],
             'source_file_ids.*' => [
                 'required', 'integer', 'distinct',
                 Rule::exists('program_files', 'id')->where('program_id', $program->id)->where('upload_status', 'uploaded'),

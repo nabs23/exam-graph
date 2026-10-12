@@ -132,9 +132,64 @@ test('the structured agent stores only topics with citations in the selected pag
         ->get(route('programs.subjects.topics-extraction.show', [$subject->program, $subject, $extraction]))
         ->assertInertia(fn (Assert $page) => $page
             ->where('sourceSnapshotCurrent', true)
+            ->has('existingTopics', 0)
             ->has('sourcePages', 1)
             ->where('sourcePages.0.source_file_id', $file->id)
             ->where('sourcePages.0.page_number', 3));
+});
+
+test('numbered topics with an incorrect parent code reach review with a correction note', function () {
+    $subject = Subject::factory()->create();
+    $file = readySubjectTopicFile($subject, 'Official syllabus');
+    addSubjectTopicPage($file, 1, '4.0 Non-financial Assets; 4.1 Inventories; 4.2 Property, plant, and equipment.');
+    $snapshot = subjectTopicSnapshot($file);
+    $extraction = SubjectTopicExtraction::factory()->for($subject)->create([
+        'status' => SubjectTopicExtractionStatus::Queued,
+        'source_files' => $snapshot,
+        'source_hash' => hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)),
+        'proposal' => null,
+    ]);
+    Ai::fakeAgent(SubjectTopicExtractor::class, [[
+        'topics' => [
+            ['code' => '4.0', 'title' => 'Non-financial Assets', 'description' => null, 'parent_index' => null, 'source_pages' => [['source_file_id' => $file->id, 'page_number' => 1]]],
+            ['code' => '4.1', 'title' => 'Inventories', 'description' => null, 'parent_index' => 0, 'source_pages' => [['source_file_id' => $file->id, 'page_number' => 1]]],
+            ['code' => '4.2', 'title' => 'Property, plant, and equipment', 'description' => null, 'parent_index' => 1, 'source_pages' => [['source_file_id' => $file->id, 'page_number' => 1]]],
+        ],
+    ]]);
+
+    app(SubjectTopicExtractionService::class)->extract($extraction->id);
+
+    $proposal = $extraction->fresh()->proposal;
+    expect($extraction->fresh()->status)->toBe(SubjectTopicExtractionStatus::Reviewing)
+        ->and($proposal['validation']['status'])->toBe('needs_review')
+        ->and($proposal['validation']['notes'])->toContain('One or more numbered topics has a parent that does not match its official code hierarchy. Correct the parent assignments before publishing.');
+});
+
+test('numbered sibling topics out of code order reach review with a correction note', function () {
+    $subject = Subject::factory()->create();
+    $file = readySubjectTopicFile($subject, 'Official syllabus');
+    addSubjectTopicPage($file, 1, '4.0 Non-financial Assets; 4.1 Inventories; 4.2 Property, plant, and equipment.');
+    $snapshot = subjectTopicSnapshot($file);
+    $extraction = SubjectTopicExtraction::factory()->for($subject)->create([
+        'status' => SubjectTopicExtractionStatus::Queued,
+        'source_files' => $snapshot,
+        'source_hash' => hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)),
+        'proposal' => null,
+    ]);
+    Ai::fakeAgent(SubjectTopicExtractor::class, [[
+        'topics' => [
+            ['code' => '4.0', 'title' => 'Non-financial Assets', 'description' => null, 'parent_index' => null, 'source_pages' => [['source_file_id' => $file->id, 'page_number' => 1]]],
+            ['code' => '4.2', 'title' => 'Property, plant, and equipment', 'description' => null, 'parent_index' => 0, 'source_pages' => [['source_file_id' => $file->id, 'page_number' => 1]]],
+            ['code' => '4.1', 'title' => 'Inventories', 'description' => null, 'parent_index' => 0, 'source_pages' => [['source_file_id' => $file->id, 'page_number' => 1]]],
+        ],
+    ]]);
+
+    app(SubjectTopicExtractionService::class)->extract($extraction->id);
+
+    $proposal = $extraction->fresh()->proposal;
+    expect($extraction->fresh()->status)->toBe(SubjectTopicExtractionStatus::Reviewing)
+        ->and($proposal['validation']['status'])->toBe('needs_review')
+        ->and($proposal['validation']['notes'])->toContain('Numbered sibling topics are not in code order. Reorder them before publishing.');
 });
 
 test('a proposal with a citation outside the selected source pages reaches review with a validation note', function () {
@@ -412,6 +467,129 @@ test('publishing selected topics stores their source mappings atomically', funct
         ->and($mapping->source_title)->toBe('Official syllabus')
         ->and($mapping->source_hash)->toBe($firstFile->content_hash)
         ->and($mapping->page_number)->toBe(1);
+});
+
+test('reviewers can match existing topics and publish cited descendants beneath them', function () {
+    $subject = Subject::factory()->create();
+    $file = readyProgramTopicFile($subject, 'Official LECPA syllabus');
+    addProgramTopicPage($file, 4, '4.0 Non-financial Assets; 4.2 Property, plant, and equipment; 4.2.5 Subsequent measurement.');
+    $root = $subject->syllabusTopics()->create([
+        'code' => '4.0',
+        'title' => 'Non-financial Assets',
+        'description' => 'Keep this existing description.',
+        'sort_order' => 0,
+    ]);
+    $ppe = $subject->syllabusTopics()->create([
+        'parent_id' => $root->id,
+        'code' => '4.2',
+        'title' => 'Property, plant, and equipment',
+        'description' => 'Keep this existing description too.',
+        'sort_order' => 1,
+    ]);
+    $topics = [
+        ['code' => '4.0', 'title' => 'Non-financial Assets', 'parent_index' => null],
+        ['code' => '4.2', 'title' => 'Property, plant, and equipment', 'parent_index' => 0],
+        ['code' => '4.2.5', 'title' => 'Subsequent measurement', 'parent_index' => 1],
+        ['code' => '4.2.5.1', 'title' => 'Cost method', 'parent_index' => 2],
+        ['code' => '4.2.5.1.1', 'title' => 'Depreciation', 'parent_index' => 3],
+        ['code' => '4.2.5.1.2', 'title' => 'Depreciation methods', 'parent_index' => 3],
+        ['code' => '4.2.5.1.3', 'title' => 'Changes in useful life and depreciation methods', 'parent_index' => 3],
+    ];
+    $snapshot = programTopicSnapshot([$file]);
+    $extraction = SubjectTopicExtraction::factory()->for($subject)->create([
+        'source_files' => $snapshot,
+        'source_hash' => hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)),
+        'proposal' => ['topics' => array_map(fn (array $topic): array => [
+            ...$topic,
+            'description' => null,
+            'source_pages' => [['source_file_id' => $file->id, 'page_number' => 4]],
+        ], $topics)],
+    ]);
+    $selections = array_map(function (array $topic, int $index) use ($root, $ppe): array {
+        return [
+            'include' => '1',
+            'code' => $topic['code'],
+            'title' => $topic['title'],
+            'description' => '',
+            'parent_reference' => $topic['parent_index'] === null ? '' : 'proposal:'.$topic['parent_index'],
+            'match_existing_topic_id' => match ($index) {
+                0 => (string) $root->id,
+                1 => (string) $ppe->id,
+                default => '',
+            },
+            'sort_order' => (string) $index,
+        ];
+    }, $topics, array_keys($topics));
+
+    app(SubjectTopicExtractionService::class)->publish($extraction, $selections, User::factory()->admin()->create());
+
+    $createdCostMethod = $subject->syllabusTopics()->where('code', '4.2.5.1')->firstOrFail();
+    $subsequentMeasurement = $subject->syllabusTopics()->where('code', '4.2.5')->firstOrFail();
+    expect($subject->syllabusTopics()->count())->toBe(7)
+        ->and($subject->syllabusTopics()->where('code', '4.0')->count())->toBe(1)
+        ->and($root->fresh()->description)->toBe('Keep this existing description.')
+        ->and($ppe->fresh()->description)->toBe('Keep this existing description too.')
+        ->and($subsequentMeasurement->parent_id)->toBe($ppe->id)
+        ->and($createdCostMethod->parent_id)->toBe($subsequentMeasurement->id)
+        ->and($root->sources()->sole()->page_number)->toBe(4)
+        ->and($ppe->sources()->sole()->page_number)->toBe(4)
+        ->and($subject->syllabusTopics()->withCount('sources')->get()->sum('sources_count'))->toBe(7)
+        ->and($extraction->fresh()->reviewed_proposal['topics'])->toHaveCount(7)
+        ->and(collect($extraction->fresh()->reviewed_proposal['topics'])->where('matched_existing_topic', true)->count())->toBe(2)
+        ->and($extraction->fresh()->reviewed_proposal['skipped_topics'])->toBe([]);
+});
+
+test('reviewers cannot match a proposal to a different or cross-subject topic', function () {
+    $subject = Subject::factory()->create();
+    $otherSubject = Subject::factory()->create();
+    $file = readySubjectTopicFile($subject, 'Official syllabus');
+    addSubjectTopicPage($file, 1, '4.2 Property, plant and equipment.');
+    $existingTopic = $subject->syllabusTopics()->create([
+        'code' => '4.2',
+        'title' => 'Property, plant and equipment',
+        'sort_order' => 0,
+    ]);
+    $otherTopic = $otherSubject->syllabusTopics()->create([
+        'code' => '4.3',
+        'title' => 'Other subject topic',
+        'sort_order' => 0,
+    ]);
+    $snapshot = subjectTopicSnapshot($file);
+    $extraction = SubjectTopicExtraction::factory()->for($subject)->create([
+        'source_files' => $snapshot,
+        'source_hash' => hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)),
+        'proposal' => ['topics' => [[
+            'code' => '4.2',
+            'title' => 'Property, plant and equipment',
+            'description' => null,
+            'parent_index' => null,
+            'source_pages' => [['source_file_id' => $file->id, 'page_number' => 1]],
+        ]]],
+    ]);
+    $reviewer = User::factory()->admin()->create();
+
+    expect(fn () => app(SubjectTopicExtractionService::class)->publish($extraction, [[
+        'include' => '1',
+        'code' => '4.2',
+        'title' => 'Altered title',
+        'description' => '',
+        'match_existing_topic_id' => (string) $existingTopic->id,
+        'parent_reference' => '',
+        'sort_order' => '0',
+    ]], $reviewer))->toThrow(ValidationException::class);
+
+    expect(fn () => app(SubjectTopicExtractionService::class)->publish($extraction, [[
+        'include' => '1',
+        'code' => '4.2',
+        'title' => 'Property, plant and equipment',
+        'description' => '',
+        'parent_reference' => 'existing:'.$otherTopic->id,
+        'sort_order' => '0',
+    ]], $reviewer))->toThrow(ValidationException::class);
+
+    expect($subject->syllabusTopics()->count())->toBe(1)
+        ->and($existingTopic->sources()->count())->toBe(0)
+        ->and($extraction->fresh()->status)->toBe(SubjectTopicExtractionStatus::Reviewing);
 });
 
 test('publishing is rejected and records source change when a selected file changes', function () {

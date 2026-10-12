@@ -2,7 +2,7 @@
 
 ## Status and relationship to 12-D
 
-**Status: core subject topic-extraction implementation is complete; source-backed development acceptance remains. Production compliance work is deferred.** This document turns the product requirements in [12-D — Subject-Scoped Syllabus Topic Extraction](12-d-curriculum-extraction-subjects-concepts.md) into an implementation sequence. 12-D remains the normative scope for what subject topic extraction may propose and publish. This plan is limited to that feature. The existing program-wide extraction workflow and program-file management interfaces remain supported and are outside this plan. Development acceptance uses the approved source and criteria below; provider/legal compliance review is a later production-readiness task, not a feature-completion gate.
+**Status: core subject topic-extraction implementation and initial source-backed development acceptance are complete. Production compliance work is deferred.** This document turns the product requirements in [12-D — Subject-Scoped Syllabus Topic Extraction](12-d-curriculum-extraction-subjects-concepts.md) into an implementation sequence. 12-D remains the normative scope for what subject topic extraction may propose and publish. This plan is limited to that feature. The existing program-wide extraction workflow and program-file management interfaces remain supported and are outside this plan. Development acceptance uses the approved source and criteria below; provider/legal compliance review is a later production-readiness task, not a feature-completion gate.
 
 Subject topic extraction is an independent workflow. It does not replace or modify program-wide curriculum extraction or program-file management.
 
@@ -48,9 +48,9 @@ Use the Laravel AI SDK through a new subject-specific structured-output agent. K
 ### Review and publication
 
 - Give reviewers a dedicated extraction detail view with source file/page citations and excerpts resolved from matching page-text rows. Reviewers can edit titles/codes, exclude topics, reorder nodes, change parentage, publish selected topics, or reject the proposal.
-- Before publication, verify that the subject still exists, all source snapshot files and hashes are unchanged, the reviewed hierarchy is valid, and topic codes do not conflict with the subject's existing topics.
-- Write selected `syllabus_topics` and their durable source-page mapping rows in a single database transaction. Set `parent_id` and `sort_order` from the final reviewed hierarchy. Excluded or rejected proposals create no topic rows.
-- Preserve existing manually entered topics. At publication, skip and report only the conflicting proposal topic; continue with other valid selected topics. Also skip descendants whose proposed parent was skipped. Never overwrite, merge, or silently deduplicate existing topics.
+- Before publication, verify that the subject still exists, all source snapshot files and hashes are unchanged, the reviewed hierarchy is valid, every existing-topic match is an exact code/title match in the subject, and every selected parent belongs to that subject.
+- Write selected `syllabus_topics` and their durable source-page mapping rows in a single database transaction. Set `parent_id` and `sort_order` from the final reviewed hierarchy. An explicit exact-match decision attaches source mappings to the existing topic ID; it never edits that topic. Excluded or rejected proposals create no topic rows.
+- Preserve existing manually entered topics. For unmatched conflicts, skip and report only the conflicting proposal topic and descendants whose proposed parent was skipped; continue with unrelated selected items. A reviewer may link a conflicting proposal to an exact existing topic and attach new descendants to it. Never overwrite or silently deduplicate existing topics.
 
 ### Routes and UI
 
@@ -68,7 +68,7 @@ Use the Laravel AI SDK through a new subject-specific structured-output agent. K
 - [x] First release supports uploaded PDFs with completed page text and embedding status.
 - [x] Bounds are configurable: 10 files, 300 pages, and 250,000 characters by default; over-limit requests are rejected before dispatch. The approved 68-page LECPA source has 195,074 extracted characters and therefore fits as one source while preserving original page numbers.
 - [x] Page text currently comes from `file_page_embeddings`, so completed embedding status and matching content hashes are required. Separating text extraction from vector generation is deferred.
-- [x] Existing code/title conflicts block publication until the reviewer edits or excludes the colliding proposal. Source-file deletion nulls the live FK while preserving source ID, title, hash, and page.
+- [x] Unmatched code/title conflicts block that proposal item and its dependent descendants. A reviewer may explicitly match an item to an existing topic only when code and title match; publication attaches verified citations to the existing row without changing it. Source-file deletion nulls the live FK while preserving source ID, title, hash, and page.
 - [x] Keep the existing program-wide extraction and program-file workflows outside this feature; do not retire or alter their interfaces, records, tables, or source objects as part of subject topic extraction.
 - [x] The configured target database is PostgreSQL 18.4 with pgvector enabled. Both new migrations are applied there. Keep the production default disabled; local and test environments may enable the feature explicitly for development acceptance.
 - [x] Approve the PRC-hosted 2022 LECPA syllabus PDF as the initial development evaluation source. Use it for the selected FAR subject; do not use the current “Main Reviewer” upload because its filename identifies a Hospitality Management document, and defer “Accounting Succinctly” because it belongs to another subject and has no page text yet.
@@ -93,6 +93,7 @@ Use the Laravel AI SDK through a new subject-specific structured-output agent. K
 - [x] Generate and use Wayfinder helpers.
 - [x] Add the subject show tab and `SubjectTopicExtractionPanel` component.
 - [x] Add a dedicated route page and reviewer detail UI with source page evidence, edit/exclude/reorder controls, and publish/reject actions.
+- [x] Let reviewers explicitly match an exact existing code/title and choose an existing subject topic as a parent, so verified citations can be attached without changing existing topic data.
 - [x] Check: nested program/subject scope and selected-file ownership are covered by feature tests; all routes remain in the content-management authorization group.
 
 ### Phase 4 — Atomic publication and subject-workflow isolation
@@ -100,7 +101,7 @@ Use the Laravel AI SDK through a new subject-specific structured-output agent. K
 - [x] Publish reviewed topics and source mappings atomically after revalidating the subject, source snapshot, hierarchy, and code collisions.
 - [x] Verify rejection, exclusion, changed/deleted sources, and transaction failures leave no partial topic tree.
 - [x] Keep publication inside the subject-scoped service and transaction. Publish only reviewer-selected syllabus topics and their topic-source mappings.
-- [x] Check: subject manual data is preserved; code/title collisions skip only the conflicting proposal topic, dependent descendants are reported, and unrelated selected topics publish with their source-page provenance.
+- [x] Check: subject manual data is preserved; unmatched code/title conflicts skip only the conflicting proposal topic and its dependent descendants, while explicit exact matches retain the existing topic and allow selected descendants to publish with source-page provenance.
 - [x] Check: subject extraction routes and file selection operate only on the selected subject. Program-wide extraction and program-file interfaces remain outside the subject workflow and are not retired by this plan.
 
 ### Phase 5 — Development acceptance
@@ -108,7 +109,7 @@ Use the Laravel AI SDK through a new subject-specific structured-output agent. K
 - [x] Select the official PRC-hosted LECPA syllabus PDF effective October 2022 as the initial development source. Its printed page 2 contains the target FAR PPE branch.
 - [x] Set the acceptance scope to that branch; questionnaires, reviewer textbooks, and notes are optional follow-up coverage and do not block feature completion.
 - [x] Define a reviewer-correctable acceptance criterion: after review, the published branch must match the codes, titles, parentage, sibling order, and printed-page citations below. The AI draft may need edits; record corrections and review time without blocking the initial feature release on an arbitrary percentage or time target.
-- [ ] Run the approved source through the full request, review, and publication flow and record its source hash, model/prompt version, reviewer edits, and final page mappings. This is the only remaining feature-development acceptance item; source selection and the gold outline are approved below.
+- [x] Run a queued request using the approved source, explicitly match exact existing nodes, review and publish the seven-node branch, and record the source hash, model/prompt version, reviewer decisions, and final page mappings. The initial model hierarchy placed several nodes under the wrong preceding topic; review corrected their parent references to match the approved outline.
 - [x] Confirm duplicate/collision, ownership, stale-source, and atomic-publication failure handling through the feature suite.
 
 #### Approved initial source and gold outline
@@ -125,6 +126,14 @@ Source: [official PRC LECPA syllabus PDF](https://www.prc.gov.ph/sites/default/f
             └── 4.2.5.1.3 Changes in useful life and depreciation methods
 ```
 
+#### Recorded development run
+
+- Generation record: `subject_topic_extractions.id=5`, requested `2026-10-11 12:26:01`, reviewed/published `2026-10-11 12:28:40` by the local content administrator. Provider/model: `openai` / `gpt-6-luna`; prompt version: `subject-topics-v1`.
+- Source file: `PRBOA CPALE Resolution 2022`; file content SHA-256: `d11428585fc47e456fe5b63ab089f9799719735ff1f4aac2b243a50dac42048b`; request snapshot hash: `aad29e112f6413e18a6ff1d39cfeb7dc0d77a27d8e44b60ca82493306c5390ac`.
+- The model proposed 157 topics and passed automatic structural/citation validation. The reviewer selected the seven gold-outline nodes, corrected their parent chain, matched existing topic IDs for `4.0` and `4.2`, and added five new topic rows. No proposal items were skipped; existing topic fields were preserved.
+- All seven nodes have verified mappings to original PDF page 4, whose extracted footer is printed page 2. The stored mapping rows use program-file snapshot ID `2` and the source hash above. The canonical final IDs are existing `114` (`4.0`) and `116` (`4.2`), plus new `369`–`373` (`4.2.5` through `4.2.5.1.3`).
+- Review corrections: six parent selections were set to the approved outline (including `4.2` under `4.0`, `4.2.5` under `4.2`, `4.2.5.1` under `4.2.5`, and the three final nodes under `4.2.5.1`). Code/title text needed no edits. Recorded elapsed time from job completion at `12:27:07` to publication was about 1 minute 33 seconds.
+
 Initial acceptance requires all seven nodes, exact official codes, the hierarchy and sibling order shown above, and a valid citation to printed page 2 for each node. The reviewer may edit the draft before publishing. No further model-quality threshold is required for the first development release; log corrections, citation adjustments, and review time to inform later evaluation.
 
 ### Deferred production-compliance work
@@ -140,9 +149,11 @@ Initial acceptance requires all seven nodes, exact official codes, the hierarchy
 - Every proposal topic cites one or more selected original source pages, and every published topic keeps durable file/page provenance.
 - Official numbered outlines are checked for completeness, order, parentage, codes, and citations. Failed checks appear as notes on the review result; reviewers can inspect and correct the proposal, while publication still blocks invalid hierarchy or citations.
 - Reviewers can edit, exclude, reorder, publish, or reject. Publication writes only reviewer-selected topic rows and citation mappings in one transaction.
+- A reviewer can explicitly attach citations to an exact existing code/title match and use an existing topic as a parent; existing topic fields and hierarchy remain unchanged.
 - No subject, concept, concept mapping, prerequisite, lesson, question, or learner-facing output is generated by this workflow.
 - Provider failures, invalid citations, duplicate requests, source changes, code conflicts, and unsupported inputs fail safely without exposing source text, storage credentials, or provider payloads.
 - The initial development acceptance branch matches the approved official outline and page citations after reviewer edits. Production compliance and expanded source coverage are tracked separately under deferred work.
+- Exact existing topic matches can receive verified source mappings only after explicit reviewer selection, and their existing topic data remains unchanged.
 
 ## Out of scope
 

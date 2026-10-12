@@ -9,5 +9,6 @@ enum CurriculumGenerationStatus: string
     case Reviewing = 'reviewing';
     case Approved = 'approved';
     case Rejected = 'rejected';
+    case Stale = 'stale';
     case Failed = 'failed';
 }

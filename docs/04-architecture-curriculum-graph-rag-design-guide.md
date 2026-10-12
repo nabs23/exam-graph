@@ -157,7 +157,7 @@ If evidence is insufficient:
 3. widen to the subject only when policy allows;
 4. otherwise return an insufficient-evidence state.
 
-Do not automatically fall back to unrestricted model knowledge for formal reviewer content.
+Do not automatically fall back to unrestricted model knowledge for formal lessons, assessments, or learner-facing instruction. The bounded concept-authoring exception in [12-M](12-m-topic-scoped-concept-extraction-development-plan.md) uses LLM knowledge with a complete subject topic-tree snapshot and explicit author review; it does not produce source-grounded lesson or assessment content.
 
 ## 6. Generation Architecture
 
@@ -181,6 +181,8 @@ Generation rules:
 - do not invent citations/references;
 - return insufficient evidence when needed;
 - preserve formulas and technical terminology accurately.
+
+The 12-M concept-authoring workflow is separate from this learner-content generation path. It sends the selected subject's complete recursive topic tree and existing subject concepts to the structured agent, records that scope snapshot, and labels the result ungrounded by selected program files. It must not fabricate citations or claim that the LLM's suggestions establish authoritative course facts.
 
 ## 7. Generated Asset Lifecycle
 
@@ -383,4 +385,3 @@ Avoid:
 - business rules hidden only inside prompts;
 - introducing a graph database before evidence of need;
 - discarding source chunks after generating summaries.
-

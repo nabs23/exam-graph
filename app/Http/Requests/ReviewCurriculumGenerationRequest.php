@@ -28,6 +28,9 @@ class ReviewCurriculumGenerationRequest extends FormRequest
         /** @var CurriculumGeneration $generation */
         $generation = $this->route('curriculumGeneration');
         $isSubjectGeneration = $generation->kind === CurriculumGenerationKind::Subjects;
+        $isConceptGeneration = $generation->kind === CurriculumGenerationKind::Concepts;
+        $isSubjectWideConceptGeneration = $isConceptGeneration && is_array($generation->scope_snapshot);
+        $topicIds = collect($generation->scope_snapshot['topics'] ?? [])->pluck('id')->all();
 
         return [
             'proposal_hash' => ['required', 'string', 'size:64'],
@@ -40,6 +43,7 @@ class ReviewCurriculumGenerationRequest extends FormRequest
             'items.*.description' => ['nullable', 'string', 'max:2000'],
             'items.*.parent_draft_id' => ['nullable', 'string', 'max:64'],
             'items.*.sort_order' => ['required', 'integer', 'min:0', 'max:10000'],
+            'items.*.syllabus_topic_id' => [Rule::prohibitedIf(! $isSubjectWideConceptGeneration), 'nullable', 'integer', Rule::in($topicIds)],
         ];
     }
 }

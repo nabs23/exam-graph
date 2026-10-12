@@ -8,6 +8,7 @@ use App\Models\FilePageEmbedding;
 use App\Models\Program;
 use App\Models\Subject;
 use App\Models\SubjectTopicExtraction;
+use App\Models\SyllabusTopic;
 use App\Services\SubjectTopicExtractionService;
 use App\SubjectTopicExtractionStatus;
 use Illuminate\Http\RedirectResponse;
@@ -181,6 +182,18 @@ class SubjectTopicExtractionController extends Controller
                 'reviewed_at' => $topicExtraction->reviewed_at,
             ],
             'sourcePages' => $sourcePages,
+            'existingTopics' => SyllabusTopic::query()
+                ->where('subject_id', $subject->id)
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get(['id', 'code', 'title', 'parent_id'])
+                ->map(fn (SyllabusTopic $topic): array => [
+                    'id' => $topic->id,
+                    'code' => $topic->code,
+                    'title' => $topic->title,
+                    'parent_id' => $topic->parent_id,
+                ])
+                ->values(),
             'canReview' => $topicExtraction->status === SubjectTopicExtractionStatus::Reviewing,
             'sourceSnapshotCurrent' => $service->isSnapshotCurrent($topicExtraction),
         ]);

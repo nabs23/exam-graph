@@ -60,7 +60,7 @@ return [
     'curriculum_generation' => [
         'enabled' => (bool) env('AI_CURRICULUM_GENERATION_ENABLED', false),
         'provider' => env('AI_CURRICULUM_GENERATION_PROVIDER', 'openai'),
-        'model' => env('AI_CURRICULUM_GENERATION_MODEL'),
+        'model' => env('AI_CURRICULUM_GENERATION_MODEL', 'gpt-6-luna'),
         'models' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env('AI_CURRICULUM_GENERATION_MODELS', '')),
@@ -81,7 +81,7 @@ return [
     'official_curriculum' => [
         'enabled' => (bool) env('AI_OFFICIAL_CURRICULUM_EXTRACTION_ENABLED', false),
         'provider' => env('AI_OFFICIAL_CURRICULUM_PROVIDER', 'openai'),
-        'model' => env('AI_OFFICIAL_CURRICULUM_MODEL'),
+        'model' => env('AI_OFFICIAL_CURRICULUM_MODEL', 'gpt-6-luna'),
         'models' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env('AI_OFFICIAL_CURRICULUM_MODELS', '')),
@@ -100,7 +100,7 @@ return [
         'enabled' => (bool) env('AI_SUBJECT_TOPIC_EXTRACTION_ENABLED', false),
         'validation' => (bool) env('AI_SUBJECT_TOPIC_EXTRACTION_VALIDATION', true),
         'provider' => env('AI_SUBJECT_TOPIC_EXTRACTION_PROVIDER', 'openai'),
-        'model' => env('AI_SUBJECT_TOPIC_EXTRACTION_MODEL'),
+        'model' => env('AI_SUBJECT_TOPIC_EXTRACTION_MODEL', 'gpt-6-luna'),
         'models' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env('AI_SUBJECT_TOPIC_EXTRACTION_MODELS', '')),

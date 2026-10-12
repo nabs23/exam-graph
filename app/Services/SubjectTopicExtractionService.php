@@ -11,6 +11,7 @@ use App\Models\ProgramFile;
 use App\Models\Subject;
 use App\Models\SubjectFile;
 use App\Models\SubjectTopicExtraction;
+use App\Models\SyllabusTopic;
 use App\Models\User;
 use App\SubjectTopicExtractionError;
 use App\SubjectTopicExtractionStatus;
@@ -268,12 +269,16 @@ class SubjectTopicExtractionService
                     throw ValidationException::withMessages(["topics.$index.title" => 'Selected topics need a title.']);
                 }
 
-                $parentIndex = ($selection['parent_index'] ?? '') === '' ? null : (int) $selection['parent_index'];
+                $parentReference = $this->reviewParentReference($selection);
+                $matchExistingTopicId = ($selection['match_existing_topic_id'] ?? '') === ''
+                    ? null
+                    : (int) $selection['match_existing_topic_id'];
                 $selected[$index] = [
                     'code' => $this->nullableString($selection['code'] ?? null),
                     'title' => $title,
                     'description' => $this->nullableString($selection['description'] ?? null),
-                    'parent_index' => $parentIndex,
+                    ...$parentReference,
+                    'match_existing_topic_id' => $matchExistingTopicId,
                     'sort_order' => (int) ($selection['sort_order'] ?? $index),
                     'source_pages' => $sourceCitations,
                     'verified_source_pages' => $verifiedSourceCitations,
@@ -285,29 +290,41 @@ class SubjectTopicExtractionService
                 throw ValidationException::withMessages(['topics' => 'Select at least one topic to publish.']);
             }
 
-            $this->assertReviewHierarchy($selected);
-            [$selected, $skippedTopics] = $this->excludeConflictingTopics($subject, $selected);
+            $existingTopics = $subject->syllabusTopics()->lockForUpdate()->get()->keyBy('id');
+            $this->assertReviewHierarchy($selected, $existingTopics);
+            [$publishable, $matchedExisting, $skippedTopics] = $this->excludeConflictingTopics($selected, $existingTopics);
             $filesById = collect($locked->source_files)->keyBy('id');
 
-            $ordered = $selected;
+            $ordered = $publishable;
             uasort($ordered, fn (array $left, array $right): int => $left['sort_order'] <=> $right['sort_order']);
-            $created = [];
+            $publishedTopicIds = collect($matchedExisting)
+                ->mapWithKeys(fn (array $match, int $index): array => [$index => $match['topic']->id])
+                ->all();
             foreach ($ordered as $proposalIndex => $topicData) {
-                $created[$proposalIndex] = $subject->syllabusTopics()->create([
+                $topic = $subject->syllabusTopics()->create([
                     'parent_id' => null,
                     'code' => $topicData['code'],
                     'title' => $topicData['title'],
                     'description' => $topicData['description'],
                     'sort_order' => $topicData['sort_order'],
                 ]);
+                $publishedTopicIds[$proposalIndex] = $topic->id;
             }
 
-            foreach ($selected as $proposalIndex => $topicData) {
-                $topic = $created[$proposalIndex];
-                if ($topicData['parent_index'] !== null) {
-                    $topic->update(['parent_id' => $created[$topicData['parent_index']]->id]);
+            foreach ($publishable as $proposalIndex => $topicData) {
+                $parentTopicId = $topicData['parent_topic_id']
+                    ?? ($topicData['parent_index'] === null ? null : ($publishedTopicIds[$topicData['parent_index']] ?? null));
+                if ($parentTopicId !== null) {
+                    SyllabusTopic::query()->whereKey($publishedTopicIds[$proposalIndex])->update(['parent_id' => $parentTopicId]);
                 }
+            }
 
+            $accepted = $publishable + collect($matchedExisting)
+                ->map(fn (array $match): array => $match['data'])
+                ->all();
+            ksort($accepted);
+            foreach ($accepted as $proposalIndex => $topicData) {
+                $topic = $matchedExisting[$proposalIndex]['topic'] ?? SyllabusTopic::query()->findOrFail($publishedTopicIds[$proposalIndex]);
                 foreach ($topicData['verified_source_pages'] as $sourcePage) {
                     $sourceSnapshot = $filesById->get($sourcePage['source_file_id']);
                     $isProgramFile = ($sourceSnapshot['source_type'] ?? null) === 'program_file';
@@ -318,23 +335,29 @@ class SubjectTopicExtractionService
                             ->where('legacy_id', $sourcePage['source_file_id'])
                             ->value('program_file_id');
 
-                    $topic->sources()->create([
-                        'subject_file_id' => $isProgramFile ? null : $sourcePage['source_file_id'],
-                        'program_file_id' => $programFileId,
-                        'source_file_id_snapshot' => $sourcePage['source_file_id'],
-                        'source_title' => $sourceSnapshot['title'],
-                        'source_hash' => $sourceSnapshot['content_hash'],
-                        'page_number' => $sourcePage['page_number'],
-                    ]);
+                    $topic->sources()->firstOrCreate(
+                        [
+                            'source_file_id_snapshot' => $sourcePage['source_file_id'],
+                            'page_number' => $sourcePage['page_number'],
+                        ],
+                        [
+                            'subject_file_id' => $isProgramFile ? null : $sourcePage['source_file_id'],
+                            'program_file_id' => $programFileId,
+                            'source_title' => $sourceSnapshot['title'],
+                            'source_hash' => $sourceSnapshot['content_hash'],
+                        ],
+                    );
                 }
             }
 
             $reviewedTopics = [];
-            foreach ($selected as $proposalIndex => $topicData) {
+            foreach ($accepted as $proposalIndex => $topicData) {
                 $reviewedTopics[] = [
                     ...$topicData,
                     'parent_index' => $topicData['parent_index'],
-                    'published_topic_id' => $created[$proposalIndex]->id,
+                    'parent_topic_id' => $topicData['parent_topic_id'],
+                    'matched_existing_topic' => isset($matchedExisting[$proposalIndex]),
+                    'published_topic_id' => $publishedTopicIds[$proposalIndex],
                 ];
             }
 
@@ -656,7 +679,57 @@ class SubjectTopicExtractionService
             ];
         }
 
+        $this->assertNumberedTopicHierarchy($normalized);
+
         return ['topics' => $normalized];
+    }
+
+    /** @param array<int, array<string, mixed>> $topics */
+    private function assertNumberedTopicHierarchy(array $topics): void
+    {
+        $indicesByCode = [];
+        foreach ($topics as $index => $topic) {
+            if (is_string($topic['code']) && preg_match('/^\d+(?:\.\d+)+$/', $topic['code']) === 1) {
+                $indicesByCode[$topic['code']] = $index;
+            }
+        }
+
+        $siblingsByParent = [];
+        foreach ($topics as $index => $topic) {
+            $code = $topic['code'];
+            if (! is_string($code) || preg_match('/^\d+(?:\.\d+)+$/', $code) !== 1) {
+                continue;
+            }
+
+            $segments = explode('.', $code);
+            $expectedParentCode = null;
+            if (count($segments) === 2 && $segments[1] !== '0') {
+                $expectedParentCode = $segments[0].'.0';
+            } elseif (count($segments) > 2) {
+                $expectedParentCode = implode('.', array_slice($segments, 0, -1));
+            }
+
+            if ($expectedParentCode !== null && isset($indicesByCode[$expectedParentCode])
+                && $topic['parent_index'] !== $indicesByCode[$expectedParentCode]) {
+                throw new RuntimeException('Topic parentage does not match its numbered code hierarchy.');
+            }
+
+            if (count($segments) === 2 && $segments[1] === '0' && $topic['parent_index'] !== null) {
+                throw new RuntimeException('Topic parentage does not match its numbered code hierarchy.');
+            }
+
+            $parentKey = $topic['parent_index'] === null ? 'root' : (string) $topic['parent_index'];
+            $siblingsByParent[$parentKey][] = $code;
+        }
+
+        foreach ($siblingsByParent as $siblingCodes) {
+            $orderedCodes = $siblingCodes;
+            usort($orderedCodes, version_compare(...));
+
+            if ($siblingCodes !== $orderedCodes) {
+                throw new RuntimeException('Numbered topic siblings are not in code order.');
+            }
+        }
     }
 
     /** @param array<string, mixed> $raw
@@ -699,15 +772,38 @@ class SubjectTopicExtractionService
     {
         return match ($message) {
             'Invalid topic source citations.' => 'One or more source citations do not match a page in the selected files. Verify each citation before publishing.',
+            'Topic parentage does not match its numbered code hierarchy.' => 'One or more numbered topics has a parent that does not match its official code hierarchy. Correct the parent assignments before publishing.',
+            'Numbered topic siblings are not in code order.' => 'Numbered sibling topics are not in code order. Reorder them before publishing.',
             'Topic codes must be unique within the proposal.' => 'Topic codes are duplicated. Review and correct the codes before publishing.',
             default => 'The generated topic fields or parent hierarchy did not pass automatic checks. Review and correct the proposal before publishing.',
         };
     }
 
-    /** @param array<int, array<string, mixed>> $selected */
-    private function assertReviewHierarchy(array $selected): void
+    /** @param array<string, mixed> $selection
+     * @return array{parent_index: ?int, parent_topic_id: ?int}
+     */
+    private function reviewParentReference(array $selection): array
+    {
+        $reference = $selection['parent_reference'] ?? null;
+        if (is_string($reference) && preg_match('/^(proposal|existing):(\d+)$/', $reference, $matches) === 1) {
+            return $matches[1] === 'proposal'
+                ? ['parent_index' => (int) $matches[2], 'parent_topic_id' => null]
+                : ['parent_index' => null, 'parent_topic_id' => (int) $matches[2]];
+        }
+
+        return [
+            'parent_index' => ($selection['parent_index'] ?? '') === '' ? null : (int) $selection['parent_index'],
+            'parent_topic_id' => null,
+        ];
+    }
+
+    /** @param array<int, array<string, mixed>> $selected
+     * @param  Collection<int, SyllabusTopic>  $existingTopics
+     */
+    private function assertReviewHierarchy(array $selected, Collection $existingTopics): void
     {
         $positions = [];
+        $matchedExistingIds = [];
         foreach ($selected as $index => $topic) {
             if (isset($positions[$topic['sort_order']])) {
                 throw ValidationException::withMessages(['topics' => 'Each selected topic must have a unique order.']);
@@ -717,6 +813,39 @@ class SubjectTopicExtractionService
             $parentIndex = $topic['parent_index'];
             if ($parentIndex !== null && (! isset($selected[$parentIndex]) || $parentIndex === $index)) {
                 throw ValidationException::withMessages(["topics.$index.parent_index" => 'A selected topic must have a selected parent.']);
+            }
+
+            $parentTopicId = $topic['parent_topic_id'];
+            if ($parentTopicId !== null && (! $existingTopics->has($parentTopicId)
+                || $parentTopicId === $topic['match_existing_topic_id'])) {
+                throw ValidationException::withMessages(["topics.$index.parent_reference" => 'Choose a parent topic in this subject.']);
+            }
+
+            $matchedExistingTopicId = $topic['match_existing_topic_id'];
+            if ($matchedExistingTopicId === null) {
+                continue;
+            }
+
+            $existingTopic = $existingTopics->get($matchedExistingTopicId);
+            if (! $existingTopic instanceof SyllabusTopic
+                || mb_strtolower(trim((string) $topic['code'])) !== mb_strtolower(trim((string) $existingTopic->code))
+                || mb_strtolower(trim($topic['title'])) !== mb_strtolower(trim($existingTopic->title))) {
+                throw ValidationException::withMessages(["topics.$index.match_existing_topic_id" => 'Only an existing topic with the same code and title can be matched.']);
+            }
+
+            if (isset($matchedExistingIds[$matchedExistingTopicId])) {
+                throw ValidationException::withMessages(['topics' => 'An existing topic can only be matched once in this review.']);
+            }
+
+            $matchedExistingIds[$matchedExistingTopicId] = true;
+
+            $resolvedParentTopicId = $parentTopicId;
+            if ($parentIndex !== null) {
+                $resolvedParentTopicId = $selected[$parentIndex]['match_existing_topic_id'];
+            }
+
+            if ($resolvedParentTopicId !== $existingTopic->parent_id) {
+                throw ValidationException::withMessages(["topics.$index.parent_reference" => 'The matched topic must retain its existing parent.']);
             }
         }
 
@@ -735,25 +864,28 @@ class SubjectTopicExtractionService
 
     /**
      * @param  array<int, array<string, mixed>>  $selected
-     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array{code: ?string, title: string, reasons: array<int, string>}>}
+     * @param  Collection<int, SyllabusTopic>  $existingTopics
+     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array{topic: SyllabusTopic, data: array<string, mixed>}>, 2: array<int, array{code: ?string, title: string, reasons: array<int, string>}>}
      */
-    private function excludeConflictingTopics(Subject $subject, array $selected): array
+    private function excludeConflictingTopics(array $selected, Collection $existingTopics): array
     {
-        $existingCodes = $subject->syllabusTopics()
-            ->whereNotNull('code')
+        $existingCodes = $existingTopics
             ->pluck('code')
+            ->filter()
             ->mapWithKeys(fn (string $code): array => [mb_strtolower($code) => true])
             ->all();
-        $existingRootTitles = $subject->syllabusTopics()
-            ->whereNull('parent_id')
-            ->pluck('title')
-            ->mapWithKeys(fn (string $title): array => [mb_strtolower($title) => true])
+        $existingTitlesByParent = $existingTopics
+            ->groupBy(fn (SyllabusTopic $topic): string => $topic->parent_id === null ? 'root' : 'existing:'.$topic->parent_id)
+            ->map(fn (Collection $topics): array => $topics
+                ->mapWithKeys(fn (SyllabusTopic $topic): array => [mb_strtolower($topic->title) => true])
+                ->all())
             ->all();
 
         $pending = $selected;
         uasort($pending, fn (array $left, array $right): int => $left['sort_order'] <=> $right['sort_order']);
 
         $publishable = [];
+        $matchedExisting = [];
         $skipped = [];
         $seenCodes = $existingCodes;
         $seenTitles = [];
@@ -776,21 +908,38 @@ class SubjectTopicExtractionService
                     continue;
                 }
 
-                if ($parentIndex !== null && ! array_key_exists($parentIndex, $publishable)) {
+                if ($parentIndex !== null
+                    && ! array_key_exists($parentIndex, $publishable)
+                    && ! array_key_exists($parentIndex, $matchedExisting)) {
+                    continue;
+                }
+
+                if ($topic['match_existing_topic_id'] !== null) {
+                    $matchedExisting[$index] = [
+                        'topic' => $existingTopics->get($topic['match_existing_topic_id']),
+                        'data' => $topic,
+                    ];
+                    unset($pending[$index]);
+                    $madeProgress = true;
+
                     continue;
                 }
 
                 $reasons = [];
                 $normalizedCode = $topic['code'] === null ? null : mb_strtolower($topic['code']);
                 $normalizedTitle = mb_strtolower($topic['title']);
-                $parentKey = $parentIndex === null ? 'root' : (string) $parentIndex;
+                $parentTopicId = $topic['parent_topic_id']
+                    ?? ($parentIndex === null ? null : ($matchedExisting[$parentIndex]['topic']->id ?? null));
+                $parentKey = $parentTopicId !== null
+                    ? 'existing:'.$parentTopicId
+                    : ($parentIndex === null ? 'root' : 'proposal:'.$parentIndex);
                 $titleKey = $parentKey.':'.$normalizedTitle;
 
                 if ($normalizedCode !== null && isset($seenCodes[$normalizedCode])) {
                     $reasons[] = 'The topic code already exists in this subject or an earlier selected topic.';
                 }
 
-                if (isset($seenTitles[$titleKey]) || ($parentIndex === null && isset($existingRootTitles[$normalizedTitle]))) {
+                if (isset($seenTitles[$titleKey]) || isset($existingTitlesByParent[$parentKey][$normalizedTitle])) {
                     $reasons[] = 'The topic title already exists at this level in the subject or proposal.';
                 }
 
@@ -827,9 +976,10 @@ class SubjectTopicExtractionService
         }
 
         ksort($publishable);
+        ksort($matchedExisting);
         ksort($skipped);
 
-        return [$publishable, array_values($skipped)];
+        return [$publishable, $matchedExisting, array_values($skipped)];
     }
 
     private function validText(mixed $value, int $maxLength): bool

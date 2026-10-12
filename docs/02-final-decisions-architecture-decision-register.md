@@ -107,9 +107,9 @@ Avoid designs that approach MongoDB document-size limits by embedding large tree
 
 **Status: Final**
 
-Formal AI-assisted lessons and tutor responses should be grounded in retrieved chunks from authorized reviewer/classroom content.
+Formal AI-assisted lessons and tutor responses should be grounded in retrieved chunks from authorized reviewer/classroom content. The separately approved concept-authoring workflow in [12-M](12-m-topic-scoped-concept-extraction-development-plan.md) may use LLM knowledge with the selected subject's complete recursive topic tree as scope context; these private proposals require explicit author review and carry no source-verification, correctness, completeness, or PRC-compliance claim.
 
-The LLM must not be treated as the primary source of truth for course facts.
+The LLM must not be treated as the primary source of truth for course facts or learner-facing instruction. In 12-M it is used to suggest app-authored concept candidates for review, not to establish authoritative facts.
 
 ## D-010 — AI Provider
 
@@ -239,4 +239,3 @@ The system must preserve the distinction between:
 - learner mastery state.
 
 Do not collapse these into one AI-generated content collection. They have different authority, lifecycle, and audit requirements.
-
