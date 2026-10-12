@@ -89,6 +89,13 @@ test('creating a concept from a topic keeps the route ownership and preselected 
     $this->assertDatabaseHas('concepts', ['subject_id' => $subject->id, 'syllabus_topic_id' => $topic->id, 'code' => 'CELL-1']);
 });
 
+test('topics without a loaded subject serialize without crashing', function () {
+    $topic = SyllabusTopic::factory()->create();
+    $partiallySelectedTopic = SyllabusTopic::query()->select(['id', 'title'])->findOrFail($topic->id);
+
+    expect($partiallySelectedTopic->toArray()['route_parameters'])->toBe([]);
+});
+
 test('moving a concept redirects to its new subject hierarchy', function () {
     $concept = Concept::factory()->create();
     $destination = Subject::factory()->create();

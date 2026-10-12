@@ -55,7 +55,7 @@ class SyllabusTopicController extends Controller
      */
     public function show(Program $program, Subject $subject, SyllabusTopic $topic): Response
     {
-        return Inertia::render('admin/topics/show', ['topic' => $topic->load(['subject', 'parent', 'children', 'concepts'])]);
+        return Inertia::render('admin/topics/show', ['topic' => $topic->load(['subject.program', 'parent', 'children', 'concepts'])]);
     }
 
     /**

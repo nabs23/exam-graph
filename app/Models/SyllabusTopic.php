@@ -55,6 +55,12 @@ class SyllabusTopic extends Model
     /** @return array<string, int> */
     public function curriculumRouteParameters(): array
     {
-        return $this->subject->curriculumRouteParameters() + ['topic' => (int) $this->id];
+        $subject = $this->subject;
+
+        if ($subject === null) {
+            return [];
+        }
+
+        return $subject->curriculumRouteParameters() + ['topic' => (int) $this->id];
     }
 }

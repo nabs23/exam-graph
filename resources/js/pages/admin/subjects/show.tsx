@@ -49,6 +49,7 @@ export default function Subject({ subject, programFiles, topicExtractionSummary,
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <Link href={generations.create(subject.program.id, { query: { kind: 'concepts', subject_id: subject.id } })} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Draft concepts</Link>
+                    <Link href={generations.create(subject.program.id, { query: { kind: 'lessons', subject_id: subject.id, scope_type: 'subject', scope_id: subject.id } })} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Draft lessons</Link>
                     <Link href={subjectTopics.index(subject)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Manage syllabus topics</Link>
                     <Link href={subjects.edit(subject)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Edit subject</Link>
                 </div>

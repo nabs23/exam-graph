@@ -23,6 +23,7 @@ This directory contains the product, curriculum, architecture, requirements, and
 17. [Ungrounded curriculum and lesson generation MVP](12-j-ungrounded-curriculum-and-lesson-generation-mvp.md), a proposed reviewer-controlled plan for LLM-generated subjects, topic hierarchies, and lessons without source grounding.
 18. [Program source library and author-reviewed curriculum generation](12-k-program-source-library-and-reviewed-curriculum-generation-plan.md), the completed transition to program-owned files with optional subject association and explicitly approved subject, topic, and concept proposals.
 19. [Subject-wide instructional concept extraction](12-m-topic-scoped-concept-extraction-development-plan.md), the development plan for drafting author-approved concepts across one subject's complete recursive topic tree using LLM knowledge.
+20. [LLM-knowledge lesson generation](12-n-ungrounded-lesson-generation-development-plan.md), the implemented development workflow for drafting lessons from concept, topic, or subject context without source materials, retrieval, or citations.
 
 ## Directory Contents
 
@@ -60,6 +61,7 @@ docs/
 | Planning | [12-J — Ungrounded Curriculum and Lesson Generation MVP](12-j-ungrounded-curriculum-and-lesson-generation-mvp.md) | Proposed plan for bounded LLM-generated subjects, instructional topic hierarchies, and lesson drafts with mandatory reviewer approval and no source-grounding claims. |
 | Planning | [12-K — Program Source Library and Author-Reviewed Curriculum Generation](12-k-program-source-library-and-reviewed-curriculum-generation-plan.md) | Records the completed program-file transition and source-backed subject/topic proposal workflow; concept generation is governed by 12-M. |
 | Planning | [12-M — Subject-Wide Instructional Concept Extraction](12-m-topic-scoped-concept-extraction-development-plan.md) | Defines file-free LLM concept proposals across a selected subject's complete recursive topic tree, snapshot validation, per-item approval, and evaluation gates. |
+| Planning | [12-N — LLM-Knowledge Lesson Generation](12-n-ungrounded-lesson-generation-development-plan.md) | Records the implemented lesson-drafting workflow from selected concepts within concept, topic, or subject scope, using LLM knowledge with per-item author review and no source materials or citations. |
 | Operations | [13 — CI/CD Setup Guide](13-ci-cd-setup-guide.md) | GitHub Actions, Docker Hub, and Coolify setup for testing and deployment. |
 | Planning | [Curriculum Extraction Handoff Checklist](next-tasks-handoff.md) | Records the completed workflow, environment verification steps, known operational follow-ups, and next product decisions. |
 

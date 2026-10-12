@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\GenerateCurriculumProposal;
+use App\Models\Concept;
 use App\Models\CurriculumGeneration;
 use App\Models\Program;
 use App\Models\ProgramFile;
@@ -102,6 +103,40 @@ test('concept requests reject a subject from another program without queueing a 
 
     expect(CurriculumGeneration::query()->count())->toBe(0);
     Queue::assertNothingPushed();
+});
+
+test('authors can queue an LLM-only lesson request from a selected concept', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    $concept = Concept::factory()->for($subject)->create([
+        'description' => 'A reviewed concept description.',
+    ]);
+    $admin = User::factory()->admin()->create();
+
+    $this->actingAs($admin)
+        ->get(route('programs.curriculum-generations.create', $program).'?kind=lessons&subject_id='.$subject->id.'&scope_type=concept&scope_id='.$concept->id)
+        ->assertInertia(fn ($page) => $page
+            ->component('admin/curriculum-generations/create')
+            ->where('initialKind', 'lessons')
+            ->where('initialScopeType', 'concept')
+            ->where('initialScopeId', $concept->id));
+
+    $this->actingAs($admin)->post(route('programs.curriculum-generations.store', $program), [
+        'kind' => 'lessons',
+        'subject_id' => $subject->id,
+        'scope_type' => 'concept',
+        'scope_id' => $concept->id,
+        'concept_ids' => [(string) $concept->id],
+        'request_context' => 'Explain the core idea clearly.',
+    ])->assertRedirect();
+
+    $generation = CurriculumGeneration::query()->where('kind', 'lessons')->firstOrFail();
+    expect($generation->scope_snapshot['scope_type'])->toBe('concept')
+        ->and($generation->scope_snapshot['target_concept_ids'])->toBe([$concept->id])
+        ->and($generation->source_files)->toBe([])
+        ->and($generation->ungrounded_requested)->toBeTrue();
+    Queue::assertPushed(GenerateCurriculumProposal::class);
 });
 
 test('generation detail binding is scoped to the route program', function () {

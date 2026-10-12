@@ -9,6 +9,7 @@ use App\Exceptions\CurriculumGenerationException;
 use App\Jobs\GenerateCurriculumProposal;
 use App\Models\Concept;
 use App\Models\CurriculumGeneration;
+use App\Models\Lesson;
 use App\Models\Program;
 use App\Models\ProgramFile;
 use App\Models\Subject;
@@ -27,9 +28,9 @@ use Throwable;
 
 class CurriculumGenerationService
 {
-    private const PROMPT_VERSION = 'curriculum-proposal-v2';
+    private const PROMPT_VERSION = 'curriculum-proposal-v3';
 
-    private const SCHEMA_VERSION = '2';
+    private const SCHEMA_VERSION = '3';
 
     public function __construct(private PdfTextExtractor $pdfTextExtractor) {}
 
@@ -66,6 +67,9 @@ class CurriculumGenerationService
         ?string $requestContext = null,
         bool $ungrounded = false,
         ?string $model = null,
+        ?string $scopeType = null,
+        ?int $scopeId = null,
+        array $targetConceptIds = [],
     ): CurriculumGeneration {
         $this->assertAvailable();
 
@@ -76,14 +80,19 @@ class CurriculumGenerationService
         $model ??= (string) config('ai.curriculum_generation.model');
         $sourceFileIds = array_map('intval', $sourceFileIds);
         $fileIds = array_values(array_unique($sourceFileIds));
+        $targetConceptIds = array_map('intval', $targetConceptIds);
         $subjectWideConcepts = $kind === CurriculumGenerationKind::Concepts;
+        $lessonGeneration = $kind === CurriculumGenerationKind::Lessons;
         if ($subjectWideConcepts) {
             $ungrounded = true;
         }
-        if ($subjectWideConcepts && $fileIds !== []) {
-            throw ValidationException::withMessages(['source_file_ids' => 'Subject-wide concept proposals do not use program files.']);
+        if ($lessonGeneration) {
+            $ungrounded = true;
         }
-        if ((! $subjectWideConcepts && $fileIds === []) || count($fileIds) !== count($sourceFileIds)) {
+        if (($subjectWideConcepts || $lessonGeneration) && $fileIds !== []) {
+            throw ValidationException::withMessages(['source_file_ids' => 'LLM-only curriculum proposals do not use program files.']);
+        }
+        if ((! $subjectWideConcepts && ! $lessonGeneration && $fileIds === []) || count($fileIds) !== count($sourceFileIds)) {
             throw ValidationException::withMessages(['source_file_ids' => 'Select one or more distinct program files.']);
         }
 
@@ -91,12 +100,16 @@ class CurriculumGenerationService
             throw ValidationException::withMessages(['source_file_ids' => 'Select no more than the allowed number of source files.']);
         }
 
-        return DB::transaction(function () use ($program, $kind, $fileIds, $requester, $subject, $topic, $requestContext, $ungrounded, $model, $subjectWideConcepts): CurriculumGeneration {
+        return DB::transaction(function () use ($program, $kind, $fileIds, $requester, $subject, $topic, $requestContext, $ungrounded, $model, $subjectWideConcepts, $lessonGeneration, $scopeType, $scopeId, $targetConceptIds): CurriculumGeneration {
             $lockedProgram = Program::query()->lockForUpdate()->findOrFail($program->id);
-            $this->assertScope($lockedProgram, $kind, $subject, $topic);
+            if (! $lessonGeneration) {
+                $this->assertScope($lockedProgram, $kind, $subject, $topic);
+            } elseif ($subject === null || (int) $subject->program_id !== (int) $lockedProgram->id) {
+                throw ValidationException::withMessages(['subject_id' => 'Choose a subject in this program.']);
+            }
 
             $files = new Collection;
-            if (! $subjectWideConcepts) {
+            if (! $subjectWideConcepts && ! $lessonGeneration) {
                 $query = ProgramFile::query()
                     ->where('program_id', $lockedProgram->id)
                     ->whereIn('id', $fileIds)
@@ -113,7 +126,9 @@ class CurriculumGenerationService
 
             $sourceFiles = $this->sourceSnapshot($files);
             $sourceHash = hash('sha256', json_encode($sourceFiles, JSON_THROW_ON_ERROR));
-            $scopeSnapshot = $subjectWideConcepts ? $this->subjectScopeSnapshot($subject) : null;
+            $scopeSnapshot = $subjectWideConcepts
+                ? $this->subjectScopeSnapshot($subject)
+                : ($lessonGeneration ? $this->lessonScopeSnapshot($subject, $topic, $scopeType, $scopeId, $targetConceptIds) : null);
             $provider = (string) config('ai.curriculum_generation.provider');
             $requestHash = $this->requestHash(
                 $kind,
@@ -125,6 +140,8 @@ class CurriculumGenerationService
                 $provider,
                 $model,
                 $scopeSnapshot,
+                $lessonGeneration ? $scopeType : null,
+                $lessonGeneration ? $targetConceptIds : [],
             );
 
             if ($lockedProgram->curriculumGenerations()
@@ -182,7 +199,8 @@ class CurriculumGenerationService
         try {
             $this->assertAvailable();
             $subjectWideConcepts = $generation->kind === CurriculumGenerationKind::Concepts && is_array($generation->scope_snapshot);
-            if ($subjectWideConcepts) {
+            $lessonGeneration = $generation->kind === CurriculumGenerationKind::Lessons;
+            if ($subjectWideConcepts || $lessonGeneration) {
                 if ($generation->subject === null || ! $this->scopeSnapshotMatches($generation, $generation->subject)) {
                     throw new CurriculumGenerationException('scope_changed');
                 }
@@ -213,6 +231,8 @@ class CurriculumGenerationService
                     $generation->provider,
                     $generation->model,
                     $generation->scope_snapshot,
+                    $generation->kind === CurriculumGenerationKind::Lessons ? ($generation->scope_snapshot['scope_type'] ?? null) : null,
+                    $generation->kind === CurriculumGenerationKind::Lessons ? ($generation->scope_snapshot['target_concept_ids'] ?? []) : [],
                 ),
             ])->save();
 
@@ -222,6 +242,7 @@ class CurriculumGenerationService
                 CurriculumGenerationKind::Concepts => [
                     'subject_tree' => $generation->scope_snapshot,
                 ],
+                CurriculumGenerationKind::Lessons => ['lesson_scope' => $generation->scope_snapshot],
             };
             $existingConceptLimit = max(1, (int) config('ai.curriculum_generation.max_existing_concepts', 500));
             $existingConceptCount = $subjectWideConcepts ? $generation->subject->concepts()->count() : 0;
@@ -237,22 +258,25 @@ class CurriculumGenerationService
                         'description' => $concept->description,
                     ])
                 : collect();
-            $input = json_encode([
+            $inputData = [
                 'scope' => $scope,
                 'existing_concepts' => $existingConcepts->toArray(),
                 'existing_concepts_truncated' => $existingConceptCount > $existingConcepts->count(),
                 'request_context' => $generation->request_context,
-                'selected_sources' => collect($sourceFiles)->map(fn (array $file): array => [
+                'ungrounded' => $subjectWideConcepts || $lessonGeneration || $generation->ungrounded_requested,
+            ];
+            if (! $lessonGeneration) {
+                $inputData['selected_sources'] = collect($sourceFiles)->map(fn (array $file): array => [
                     'id' => $file['id'],
                     'title' => $file['title'],
                     'file_type' => $file['file_type'],
                     'subject_id' => $file['subject_id'],
-                ])->all(),
-                'source_pages' => $sourcePages,
-                'ungrounded' => $subjectWideConcepts || $generation->ungrounded_requested,
-            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+                ])->all();
+                $inputData['source_pages'] = $sourcePages;
+            }
+            $input = json_encode($inputData, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
             if (mb_strlen($input) > max(1, (int) config('ai.curriculum_generation.max_characters', 250000))) {
-                throw new CurriculumGenerationException($subjectWideConcepts ? 'scope_limit_exceeded' : 'source_limit_exceeded');
+                throw new CurriculumGenerationException($subjectWideConcepts || $lessonGeneration ? 'scope_limit_exceeded' : 'source_limit_exceeded');
             }
 
             $response = (new CurriculumProposalGenerator(
@@ -334,6 +358,12 @@ class CurriculumGenerationService
 
                 return;
             }
+            if ($locked->kind === CurriculumGenerationKind::Lessons && is_array($locked->scope_snapshot)
+                && ($subject === null || ! $this->scopeSnapshotMatches($locked, $subject))) {
+                $this->markStale($locked);
+
+                return;
+            }
             if ($locked->syllabus_topic_id !== null) {
                 $topic = SyllabusTopic::query()->lockForUpdate()->findOrFail($locked->syllabus_topic_id);
                 if ($subject === null || (int) $topic->subject_id !== (int) $subject->id) {
@@ -369,7 +399,8 @@ class CurriculumGenerationService
                 $title = trim((string) ($selection[$titleField] ?? ''));
                 $code = trim((string) ($selection['code'] ?? ''));
                 $description = $selection['description'] ?? null;
-                if (! $this->validText($title, 255) || ! $this->validText($code, 100) || ! $this->validNullableText($description, 2000)) {
+                if ($locked->kind !== CurriculumGenerationKind::Lessons
+                    && (! $this->validText($title, 255) || ! $this->validText($code, 100) || ! $this->validNullableText($description, 2000))) {
                     throw ValidationException::withMessages(["items.$index" => 'Each item needs a title, a code, and a valid optional description.']);
                 }
 
@@ -398,6 +429,10 @@ class CurriculumGenerationService
                 $reviewedItems[$draftId] = [
                     ...$proposalItem,
                     $titleField => $title,
+                    'summary' => $locked->kind === CurriculumGenerationKind::Lessons ? trim((string) ($selection['summary'] ?? $proposalItem['summary'] ?? '')) : ($proposalItem['summary'] ?? null),
+                    'sections' => $locked->kind === CurriculumGenerationKind::Lessons ? ($selection['sections'] ?? $proposalItem['sections'] ?? []) : ($proposalItem['sections'] ?? []),
+                    'common_misconceptions' => $locked->kind === CurriculumGenerationKind::Lessons ? ($selection['common_misconceptions'] ?? $proposalItem['common_misconceptions'] ?? []) : ($proposalItem['common_misconceptions'] ?? []),
+                    'recap' => $locked->kind === CurriculumGenerationKind::Lessons ? trim((string) ($selection['recap'] ?? $proposalItem['recap'] ?? '')) : ($proposalItem['recap'] ?? null),
                     'code' => $code,
                     'description' => $description === null ? null : trim((string) $description),
                     'parent_draft_id' => $parentDraftId,
@@ -527,6 +562,8 @@ class CurriculumGenerationService
         string $provider,
         string $model,
         ?array $scopeSnapshot = null,
+        ?string $scopeType = null,
+        array $targetConceptIds = [],
     ): string {
         return hash('sha256', json_encode([
             'kind' => $kind->value,
@@ -536,6 +573,8 @@ class CurriculumGenerationService
             'ungrounded' => $ungrounded,
             'source_hash' => $sourceHash,
             'scope_snapshot' => $scopeSnapshot,
+            'scope_type' => $scopeType,
+            'target_concept_ids' => $targetConceptIds,
             'provider' => $provider,
             'model' => $model,
             'prompt_version' => self::PROMPT_VERSION,
@@ -629,7 +668,17 @@ class CurriculumGenerationService
     private function scopeSnapshotMatches(CurriculumGeneration $generation, Subject $subject): bool
     {
         try {
-            $currentSnapshot = $this->subjectScopeSnapshot($subject);
+            $currentSnapshot = $generation->kind === CurriculumGenerationKind::Lessons
+                ? $this->lessonScopeSnapshot(
+                    $subject,
+                    isset($generation->scope_snapshot['scope_id']) && $generation->scope_snapshot['scope_type'] === 'topic'
+                        ? SyllabusTopic::query()->find($generation->scope_snapshot['scope_id'])
+                        : null,
+                    $generation->scope_snapshot['scope_type'] ?? null,
+                    $generation->scope_snapshot['scope_id'] ?? null,
+                    $generation->scope_snapshot['target_concept_ids'] ?? [],
+                )
+                : $this->subjectScopeSnapshot($subject);
         } catch (ValidationException) {
             return false;
         }
@@ -638,6 +687,79 @@ class CurriculumGenerationService
             hash('sha256', json_encode($generation->scope_snapshot, JSON_THROW_ON_ERROR)),
             hash('sha256', json_encode($currentSnapshot, JSON_THROW_ON_ERROR)),
         );
+    }
+
+    /** @param list<int|string> $targetConceptIds
+     * @return array<string, mixed>
+     */
+    private function lessonScopeSnapshot(Subject $subject, ?SyllabusTopic $topic, ?string $scopeType, ?int $scopeId, array $targetConceptIds): array
+    {
+        if (! in_array($scopeType, ['concept', 'topic', 'subject'], true)) {
+            throw ValidationException::withMessages(['scope_type' => 'Choose concept, topic, or subject scope.']);
+        }
+
+        $targetConceptIds = array_values(array_unique(array_map('intval', $targetConceptIds)));
+        if ($scopeType === 'concept') {
+            $scopeId ??= $targetConceptIds[0] ?? null;
+            if ($scopeId === null || $targetConceptIds !== [(int) $scopeId]) {
+                throw ValidationException::withMessages(['concept_ids' => 'A concept-scoped request can target only its selected concept.']);
+            }
+            $targetConceptIds = [$scopeId];
+        }
+        if ($scopeType === 'subject' && (int) $scopeId !== (int) $subject->id) {
+            throw ValidationException::withMessages(['scope_id' => 'Choose the selected subject as the scope.']);
+        }
+        if ($targetConceptIds === [] || count($targetConceptIds) > max(1, (int) config('ai.curriculum_generation.max_lesson_concepts', 5))) {
+            throw ValidationException::withMessages(['concept_ids' => 'Select between one and the configured maximum of concepts.']);
+        }
+        if ($scopeType === 'topic' && ($topic === null || (int) $topic->subject_id !== (int) $subject->id || (int) $topic->id !== (int) $scopeId)) {
+            throw ValidationException::withMessages(['scope_id' => 'Choose a topic in the selected subject.']);
+        }
+
+        $concepts = Concept::query()->with(['learningObjectives:id,concept_id,description,sort_order', 'syllabusTopic:id,parent_id,title,code'])
+            ->where('subject_id', $subject->id)->whereIn('id', $targetConceptIds)->orderBy('id')->get();
+        if ($concepts->count() !== count($targetConceptIds)) {
+            throw ValidationException::withMessages(['concept_ids' => 'Choose existing concepts in the selected subject.']);
+        }
+
+        $topics = $scopeType !== 'topic' && ! $subject->syllabusTopics()->exists()
+            ? []
+            : $this->subjectScopeSnapshot($subject)['topics'];
+        $topicIds = collect($topics)->pluck('id');
+        if ($scopeType === 'topic') {
+            $descendants = collect($topics)->filter(fn (array $item): bool => collect($item['path'])->contains('id', (int) $topic->id))->pluck('id')->all();
+            $descendants[] = (int) $topic->id;
+            if ($concepts->contains(fn (Concept $concept): bool => ! in_array((int) $concept->syllabus_topic_id, $descendants, true))) {
+                throw ValidationException::withMessages(['concept_ids' => 'Choose concepts assigned to the selected topic or its descendants.']);
+            }
+        }
+        if ($scopeType === 'concept' && (int) $concepts->first()->id !== (int) $scopeId) {
+            throw ValidationException::withMessages(['scope_id' => 'Choose an existing concept.']);
+        }
+
+        $selectedTopics = match ($scopeType) {
+            'topic' => collect($topics)->filter(fn (array $item): bool => collect($item['path'])->contains('id', (int) $topic->id) || (int) $item['id'] === (int) $topic->id)->values()->all(),
+            'concept' => collect($topics)->filter(fn (array $item): bool => $item['id'] === (int) ($concepts->first()->syllabus_topic_id ?? 0))->values()->all(),
+            default => $topics,
+        };
+
+        return [
+            'scope_type' => $scopeType,
+            'scope_id' => (int) $scopeId,
+            'subject' => ['id' => (int) $subject->id, 'name' => $subject->name, 'code' => $subject->code],
+            'topics' => $selectedTopics,
+            'target_concept_ids' => $targetConceptIds,
+            'concepts' => $concepts->map(fn (Concept $concept): array => [
+                'id' => (int) $concept->id,
+                'topic_id' => $concept->syllabus_topic_id === null ? null : (int) $concept->syllabus_topic_id,
+                'code' => $concept->code,
+                'title' => $concept->title,
+                'description' => $concept->description,
+                'learning_objectives' => $concept->learningObjectives->map(fn ($objective): array => [
+                    'id' => (int) $objective->id, 'description' => $objective->description, 'sort_order' => (int) $objective->sort_order,
+                ])->all(),
+            ])->all(),
+        ];
     }
 
     private function markStale(CurriculumGeneration $generation): void
@@ -792,8 +914,13 @@ class CurriculumGenerationService
     /** @param array<string, mixed> $item */
     private function canonicalConflict(CurriculumGeneration $generation, array $item): ?string
     {
+        if ($generation->kind === CurriculumGenerationKind::Lessons) {
+            return Lesson::query()->where('concept_id', $item['concept_id'])->whereRaw('lower(title) = ?', [mb_strtolower($item['title'])])->exists()
+                ? 'A lesson with this title already exists for the selected concept.'
+                : null;
+        }
         $titleField = $generation->kind === CurriculumGenerationKind::Subjects ? 'name' : 'title';
-        $normalizedCode = mb_strtolower($item['code']);
+        $normalizedCode = mb_strtolower((string) ($item['code'] ?? ''));
         $normalizedTitle = mb_strtolower($item[$titleField]);
 
         $conflictExists = match ($generation->kind) {
@@ -809,6 +936,7 @@ class CurriculumGenerationService
                 ->where('subject_id', $generation->subject_id)
                 ->where(fn ($query) => $query->whereRaw('lower(code) = ?', [$normalizedCode])->orWhereRaw('lower(title) = ?', [$normalizedTitle]))
                 ->exists(),
+            CurriculumGenerationKind::Lessons => Lesson::query()->where('concept_id', $item['concept_id'])->whereRaw('lower(title) = ?', [$normalizedTitle])->exists(),
         };
 
         return $conflictExists ? 'A curriculum item with this code or title already exists in the selected scope.' : null;
@@ -834,6 +962,14 @@ class CurriculumGenerationService
                 'code' => $item['code'],
                 'title' => $item['title'],
                 'description' => $item['description'],
+                'sort_order' => $sortOrder,
+            ])->id,
+            CurriculumGenerationKind::Lessons => Lesson::query()->create([
+                'concept_id' => $item['concept_id'],
+                'curriculum_generation_id' => $generation->id,
+                'title' => $item['title'],
+                'summary' => $item['summary'],
+                'content' => $this->lessonContent($item),
                 'sort_order' => $sortOrder,
             ])->id,
         };
@@ -912,6 +1048,9 @@ class CurriculumGenerationService
      */
     private function validateProposal(CurriculumGeneration $generation, array $raw, array $sourcePages): array
     {
+        if ($generation->kind === CurriculumGenerationKind::Lessons) {
+            return $this->validateLessonProposal($generation, $raw);
+        }
         $items = $raw['items'] ?? null;
         $itemLimit = max(1, min(1000, (int) config('ai.curriculum_generation.max_items', 200)));
         if (! is_array($items) || $items === [] || count($items) > $itemLimit) {
@@ -1010,6 +1149,89 @@ class CurriculumGenerationService
         }
 
         return ['items' => $normalized];
+    }
+
+    /** @param array<string, mixed> $raw
+     * @return array{items: list<array<string, mixed>>}
+     */
+    private function validateLessonProposal(CurriculumGeneration $generation, array $raw): array
+    {
+        $items = $raw['items'] ?? null;
+        $allowedConceptIds = collect($generation->scope_snapshot['target_concept_ids'] ?? [])->map(fn (mixed $id): int => (int) $id);
+        if (! is_array($items) || $items === [] || count($items) !== $allowedConceptIds->count()) {
+            throw new CurriculumGenerationException('invalid_proposal');
+        }
+
+        $normalized = [];
+        $draftIds = [];
+        $seenConceptIds = [];
+        foreach (array_values($items) as $index => $item) {
+            if (! is_array($item) || ! is_string($item['draft_id'] ?? null) || preg_match('/\A[a-zA-Z0-9_-]{1,64}\z/', $item['draft_id']) !== 1
+                || in_array($item['draft_id'], $draftIds, true) || ! is_int($item['concept_id'] ?? null)
+                || ! $allowedConceptIds->contains($item['concept_id']) || in_array($item['concept_id'], $seenConceptIds, true)
+                || ! $this->validText($item['title'] ?? null, 255) || ! $this->validText($item['summary'] ?? null, 1000)
+                || ! $this->validText($item['recap'] ?? null, 2000) || ! is_array($item['sections'] ?? null)
+                || count($item['sections']) > max(1, (int) config('ai.curriculum_generation.max_lesson_sections', 5))
+                || ! is_array($item['common_misconceptions'] ?? null) || count($item['common_misconceptions']) > 10) {
+                throw new CurriculumGenerationException('invalid_proposal');
+            }
+
+            $sections = [];
+            foreach ($item['sections'] as $section) {
+                if (! is_array($section) || ! $this->validText($section['heading'] ?? null, 255) || ! $this->validText($section['explanation'] ?? null, 5000)) {
+                    throw new CurriculumGenerationException('invalid_proposal');
+                }
+                $example = $section['example'] ?? null;
+                if ($example !== null && (! is_array($example) || ! $this->validText($example['scenario'] ?? null, 1000)
+                    || ! is_array($example['steps'] ?? null) || count($example['steps']) > 10
+                    || ! $this->validText($example['takeaway'] ?? null, 1000))) {
+                    throw new CurriculumGenerationException('invalid_proposal');
+                }
+                $sections[] = ['heading' => trim($section['heading']), 'explanation' => trim($section['explanation']), 'example' => $example];
+            }
+
+            $misconceptions = [];
+            foreach ($item['common_misconceptions'] as $misconception) {
+                if (! is_array($misconception) || ! $this->validText($misconception['misconception'] ?? null, 1000)
+                    || ! $this->validText($misconception['correction'] ?? null, 1000)) {
+                    throw new CurriculumGenerationException('invalid_proposal');
+                }
+                $misconceptions[] = $misconception;
+            }
+            $normalizedItem = [
+                'draft_id' => $item['draft_id'], 'concept_id' => $item['concept_id'], 'title' => trim($item['title']),
+                'summary' => trim($item['summary']), 'sections' => $sections, 'common_misconceptions' => $misconceptions,
+                'recap' => trim($item['recap']), 'sort_order' => $index,
+                'review_notes' => ['Generated from LLM knowledge without selected source materials. Review factual accuracy and curriculum fit.'],
+            ];
+            if (mb_strlen(json_encode($normalizedItem, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)) > max(1, (int) config('ai.curriculum_generation.max_lesson_characters', 10000))) {
+                throw new CurriculumGenerationException('invalid_proposal');
+            }
+            $normalized[] = $normalizedItem;
+            $draftIds[] = $item['draft_id'];
+            $seenConceptIds[] = $item['concept_id'];
+        }
+
+        return ['items' => $normalized];
+    }
+
+    /** @param array<string, mixed> $item */
+    private function lessonContent(array $item): string
+    {
+        $parts = [];
+        foreach ($item['sections'] as $section) {
+            $parts[] = $section['heading']."\n".$section['explanation'];
+            if (is_array($section['example'] ?? null)) {
+                $example = $section['example'];
+                $parts[] = "Worked example\n".$example['scenario']."\n".implode("\n", $example['steps'])."\nTakeaway: ".$example['takeaway'];
+            }
+        }
+        foreach ($item['common_misconceptions'] as $misconception) {
+            $parts[] = "Common misconception\n".$misconception['misconception']."\nCorrection: ".$misconception['correction'];
+        }
+        $parts[] = "Recap\n".$item['recap'];
+
+        return implode("\n\n", $parts);
     }
 
     private function validText(mixed $value, int $maximum): bool

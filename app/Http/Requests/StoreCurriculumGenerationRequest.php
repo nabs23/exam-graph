@@ -28,7 +28,8 @@ class StoreCurriculumGenerationRequest extends FormRequest
         /** @var Program $program */
         $program = $this->route('program');
         $kind = $this->input('kind');
-        $requiresSubject = in_array($kind, [CurriculumGenerationKind::Topics->value, CurriculumGenerationKind::Concepts->value], true);
+        $isLessonGeneration = $kind === CurriculumGenerationKind::Lessons->value;
+        $requiresSubject = in_array($kind, [CurriculumGenerationKind::Topics->value, CurriculumGenerationKind::Concepts->value, CurriculumGenerationKind::Lessons->value], true);
         $isConceptGeneration = $kind === CurriculumGenerationKind::Concepts->value;
         $topicSubjectId = $this->input('subject_id');
         $models = array_values(array_unique(array_filter([
@@ -50,13 +51,17 @@ class StoreCurriculumGenerationRequest extends FormRequest
                 'integer',
                 Rule::exists('syllabus_topics', 'id')->where('subject_id', $topicSubjectId),
             ],
-            'source_file_ids' => [Rule::prohibitedIf($isConceptGeneration), Rule::requiredIf(! $isConceptGeneration), 'nullable', 'array', 'min:1', 'max:'.max(1, (int) config('ai.curriculum_generation.max_files', 10))],
+            'source_file_ids' => [Rule::prohibitedIf($isConceptGeneration || $isLessonGeneration), Rule::requiredIf(! $isConceptGeneration && ! $isLessonGeneration), 'nullable', 'array', 'min:1', 'max:'.max(1, (int) config('ai.curriculum_generation.max_files', 10))],
             'source_file_ids.*' => [
                 'required', 'integer', 'distinct',
                 Rule::exists('program_files', 'id')->where('program_id', $program->id)->where('upload_status', 'uploaded'),
             ],
             'request_context' => ['nullable', 'string', 'max:4000'],
-            'ungrounded' => ['required', 'boolean'],
+            'scope_type' => [Rule::requiredIf($isLessonGeneration), Rule::prohibitedIf(! $isLessonGeneration), 'nullable', Rule::in(['concept', 'topic', 'subject'])],
+            'scope_id' => [Rule::requiredIf($isLessonGeneration), Rule::prohibitedIf(! $isLessonGeneration), 'nullable', 'integer', 'min:1'],
+            'concept_ids' => [Rule::requiredIf($isLessonGeneration), Rule::prohibitedIf(! $isLessonGeneration), 'nullable', 'array', 'min:1', 'max:'.max(1, (int) config('ai.curriculum_generation.max_lesson_concepts', 5))],
+            'concept_ids.*' => ['required', 'integer', 'distinct', Rule::exists('concepts', 'id')->where('subject_id', $topicSubjectId)],
+            'ungrounded' => [Rule::requiredIf(! $isLessonGeneration), 'boolean', Rule::prohibitedIf($isLessonGeneration)],
             'model' => ['nullable', 'string', Rule::in($models)],
         ];
     }

@@ -6,6 +6,7 @@ use App\CurriculumGenerationKind;
 use App\CurriculumGenerationStatus;
 use App\Http\Requests\ReviewCurriculumGenerationRequest;
 use App\Http\Requests\StoreCurriculumGenerationRequest;
+use App\Models\Concept;
 use App\Models\CurriculumGeneration;
 use App\Models\Program;
 use App\Models\ProgramFile;
@@ -41,7 +42,10 @@ class CurriculumGenerationController extends Controller
             ->get(['id', 'program_id', 'subject_id', 'title', 'original_filename', 'mime_type', 'file_type', 'file_size', 'content_hash']);
 
         $subjects = $program->subjects()
-            ->with(['syllabusTopics' => fn ($query) => $query->orderBy('sort_order')->orderBy('id')->select(['id', 'subject_id', 'parent_id', 'title', 'code', 'description', 'sort_order'])])
+            ->with([
+                'syllabusTopics' => fn ($query) => $query->orderBy('sort_order')->orderBy('id')->select(['id', 'subject_id', 'parent_id', 'title', 'code', 'description', 'sort_order']),
+                'concepts' => fn ($query) => $query->orderBy('sort_order')->orderBy('id')->with(['syllabusTopic:id,title,code', 'learningObjectives:id,concept_id,description,sort_order']),
+            ])
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
         $requestedSubjectId = filter_var($request->query('subject_id'), FILTER_VALIDATE_INT);
@@ -54,6 +58,8 @@ class CurriculumGenerationController extends Controller
             'subjects' => $subjects,
             'initialKind' => $initialKind,
             'initialSubjectId' => $initialSubjectId,
+            'initialScopeType' => $request->query('scope_type'),
+            'initialScopeId' => filter_var($request->query('scope_id'), FILTER_VALIDATE_INT) ?: null,
             'files' => $files->map(fn (ProgramFile $file): array => [
                 'id' => $file->id,
                 'title' => $file->title,
@@ -74,6 +80,7 @@ class CurriculumGenerationController extends Controller
                     CurriculumGenerationKind::Subjects => 'Subjects',
                     CurriculumGenerationKind::Topics => 'Topics',
                     CurriculumGenerationKind::Concepts => 'Concepts',
+                    CurriculumGenerationKind::Lessons => 'Lessons',
                 },
             ], CurriculumGenerationKind::cases()),
         ]);
@@ -86,7 +93,12 @@ class CurriculumGenerationController extends Controller
     ): RedirectResponse {
         $data = $request->validated();
         $subject = isset($data['subject_id']) ? Subject::query()->findOrFail($data['subject_id']) : null;
-        $topic = isset($data['syllabus_topic_id']) ? $subject?->syllabusTopics()->findOrFail($data['syllabus_topic_id']) : null;
+        $scopeType = $data['scope_type'] ?? null;
+        $topic = isset($data['syllabus_topic_id']) && $scopeType !== 'concept' ? $subject?->syllabusTopics()->findOrFail($data['syllabus_topic_id']) : null;
+        if ($scopeType === 'concept') {
+            $targetConcept = Concept::query()->where('subject_id', $subject?->id)->findOrFail($data['scope_id']);
+            $topic = $targetConcept->syllabusTopic;
+        }
         $generation = $service->queue(
             $program,
             CurriculumGenerationKind::from($data['kind']),
@@ -95,8 +107,11 @@ class CurriculumGenerationController extends Controller
             subject: $subject,
             topic: $topic,
             requestContext: $data['request_context'] ?? null,
-            ungrounded: CurriculumGenerationKind::from($data['kind']) === CurriculumGenerationKind::Concepts || (bool) $data['ungrounded'],
+            ungrounded: CurriculumGenerationKind::from($data['kind']) === CurriculumGenerationKind::Concepts || (bool) ($data['ungrounded'] ?? false),
             model: $data['model'] ?? null,
+            scopeType: $scopeType,
+            scopeId: isset($data['scope_id']) ? (int) $data['scope_id'] : null,
+            targetConceptIds: $data['concept_ids'] ?? [],
         );
 
         return to_route('programs.curriculum-generations.show', [$program, $generation]);

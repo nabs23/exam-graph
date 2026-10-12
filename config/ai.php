@@ -71,6 +71,9 @@ return [
         'max_pages' => (int) env('AI_CURRICULUM_GENERATION_MAX_PAGES', 300),
         'max_characters' => (int) env('AI_CURRICULUM_GENERATION_MAX_CHARACTERS', 250000),
         'max_items' => (int) env('AI_CURRICULUM_GENERATION_MAX_ITEMS', 200),
+        'max_lesson_concepts' => (int) env('AI_CURRICULUM_GENERATION_MAX_LESSON_CONCEPTS', 5),
+        'max_lesson_sections' => (int) env('AI_CURRICULUM_GENERATION_MAX_LESSON_SECTIONS', 5),
+        'max_lesson_characters' => (int) env('AI_CURRICULUM_GENERATION_MAX_LESSON_CHARACTERS', 10000),
         'job_tries' => (int) env('AI_CURRICULUM_GENERATION_JOB_TRIES', 2),
         'job_backoff' => [
             (int) env('AI_CURRICULUM_GENERATION_JOB_INITIAL_BACKOFF', 15),

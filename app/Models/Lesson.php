@@ -19,11 +19,16 @@ class Lesson extends Model
 
     protected $with = ['concept'];
 
-    protected $fillable = ['concept_id', 'title', 'summary', 'content', 'sort_order'];
+    protected $fillable = ['concept_id', 'curriculum_generation_id', 'title', 'summary', 'content', 'sort_order'];
 
     public function concept(): BelongsTo
     {
         return $this->belongsTo(Concept::class);
+    }
+
+    public function curriculumGeneration(): BelongsTo
+    {
+        return $this->belongsTo(CurriculumGeneration::class);
     }
 
     /** @return array<string, int> */

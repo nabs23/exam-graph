@@ -5,6 +5,7 @@ import { concepts, topicConcepts } from '@/lib/curriculum-routes';
 import { topics } from '@/lib/curriculum-routes';
 import { subjects } from '@/lib/curriculum-routes';
 import { subjectTopics } from '@/lib/curriculum-routes';
+import generations from '@/routes/programs/curriculum-generations';
 
 type Topic = {
     id: number;
@@ -12,7 +13,7 @@ type Topic = {
     code: string | null;
     title: string;
     description: string | null;
-    subject: { id: number; name: string };
+    subject: { id: number; name: string; program: { id: number } };
     parent: { id: number; title: string } | null;
     children: { id: number; code: string | null; title: string; description: string | null }[];
     concepts: { id: number; code: string; title: string; description: string | null }[];
@@ -31,6 +32,7 @@ export default function TopicShow({ topic }: { topic: Topic }) {
                     {topic.parent && <p className="mt-2 text-sm text-muted-foreground">Parent topic: <Link href={topics.show(topic.parent)} className="underline">{topic.parent.title}</Link></p>}
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    <Link href={generations.create(topic.subject.program.id, { query: { kind: 'lessons', subject_id: topic.subject.id, scope_type: 'topic', scope_id: topic.id } })} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Draft lessons</Link>
                     <Link href={subjectTopics.index(topic.subject)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">All syllabus topics</Link>
                     <Link href={topics.edit(topic)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Edit topic</Link>
                 </div>

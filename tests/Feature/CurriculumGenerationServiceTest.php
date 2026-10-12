@@ -6,6 +6,8 @@ use App\CurriculumGenerationStatus;
 use App\Jobs\GenerateCurriculumProposal;
 use App\Models\Concept;
 use App\Models\CurriculumGeneration;
+use App\Models\LearningObjective;
+use App\Models\Lesson;
 use App\Models\Program;
 use App\Models\ProgramFile;
 use App\Models\Subject;
@@ -515,6 +517,237 @@ test('concept proposals become stale when the subject topic tree changes before 
     expect($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Stale)
         ->and($generation->fresh()->error_code)->toBe('scope_changed')
         ->and(Concept::query()->where('subject_id', $subject->id)->exists())->toBeFalse();
+});
+
+test('lesson proposals use the selected topic context and create lessons only after approval', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    $topic = SyllabusTopic::factory()->for($subject)->create(['title' => 'Assets']);
+    $childTopic = SyllabusTopic::factory()->for($subject)->create(['title' => 'Property, plant, and equipment', 'parent_id' => $topic->id]);
+    $concept = Concept::factory()->for($subject)->for($childTopic, 'syllabusTopic')->create([
+        'title' => 'Initial measurement of property, plant, and equipment',
+        'description' => 'Determine the amount recognized when a qualifying asset is first recorded.',
+    ]);
+    LearningObjective::factory()->for($concept)->create(['description' => 'Calculate the initial cost of a qualifying asset.']);
+    $otherTopic = SyllabusTopic::factory()->for($subject)->create(['title' => 'Liabilities']);
+    $outOfScopeConcept = Concept::factory()->for($subject)->for($otherTopic, 'syllabusTopic')->create();
+
+    $generation = app(CurriculumGenerationService::class)->queue(
+        $program,
+        CurriculumGenerationKind::Lessons,
+        [],
+        User::factory()->admin()->create(),
+        subject: $subject,
+        topic: $topic,
+        scopeType: 'topic',
+        scopeId: $topic->id,
+        targetConceptIds: [$concept->id],
+    );
+    $requestHash = $generation->request_hash;
+
+    expect($generation->ungrounded_requested)->toBeTrue()
+        ->and($generation->source_files)->toBe([])
+        ->and($generation->scope_snapshot['scope_type'])->toBe('topic')
+        ->and($generation->scope_snapshot['concepts'][0]['learning_objectives'][0]['description'])->toBe('Calculate the initial cost of a qualifying asset.')
+        ->and($generation->scope_snapshot['topics'])->toHaveCount(2);
+
+    CurriculumProposalGenerator::fake([[
+        'items' => [[
+            'draft_id' => 'lesson-ppe',
+            'concept_id' => $concept->id,
+            'title' => 'Measuring an asset at initial recognition',
+            'summary' => 'Identify which costs form the initial carrying amount.',
+            'sections' => [[
+                'heading' => 'Identify qualifying costs',
+                'explanation' => 'Include directly attributable costs needed to bring the asset to its intended condition.',
+                'example' => ['scenario' => 'A company installs equipment.', 'steps' => ['List purchase price', 'Add installation cost'], 'takeaway' => 'Include costs directly attributable to readiness.'],
+            ]],
+            'common_misconceptions' => [['misconception' => 'All later costs are added to the asset.', 'correction' => 'Evaluate later costs under their own recognition criteria.']],
+            'recap' => 'Measure qualifying assets using the applicable initial cost basis.',
+        ]],
+    ]]);
+    $service = app(CurriculumGenerationService::class);
+    $service->generate($generation->id);
+
+    expect($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Reviewing)
+        ->and($generation->fresh()->request_hash)->toBe($requestHash)
+        ->and(Lesson::query()->count())->toBe(0);
+    CurriculumProposalGenerator::assertPrompted(fn ($prompt): bool => $prompt->contains('Assets')
+        && $prompt->contains('Initial measurement of property, plant, and equipment')
+        && $prompt->contains('Calculate the initial cost of a qualifying asset.')
+        && ! $prompt->contains('selected_sources'));
+
+    $proposal = $generation->fresh()->proposal;
+    $service->review($generation->fresh(), hash('sha256', json_encode($proposal, JSON_THROW_ON_ERROR)), [[
+        'draft_id' => 'lesson-ppe',
+        'include' => true,
+        'title' => 'Reviewed initial measurement lesson',
+        'summary' => 'Author-edited summary.',
+        'sections' => $proposal['items'][0]['sections'],
+        'common_misconceptions' => $proposal['items'][0]['common_misconceptions'],
+        'recap' => $proposal['items'][0]['recap'],
+        'sort_order' => 0,
+    ]], User::factory()->admin()->create());
+
+    $lesson = Lesson::query()->firstOrFail();
+    expect($lesson->concept_id)->toBe($concept->id)
+        ->and($lesson->curriculum_generation_id)->toBe($generation->id)
+        ->and($lesson->summary)->toBe('Author-edited summary.')
+        ->and($lesson->content)->toContain('Worked example', 'Common misconception', 'Recap')
+        ->and($outOfScopeConcept->lessons)->toHaveCount(0)
+        ->and($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Approved);
+});
+
+test('lesson requests reject concepts outside the selected topic tree', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    $topic = SyllabusTopic::factory()->for($subject)->create();
+    $otherTopic = SyllabusTopic::factory()->for($subject)->create();
+    $concept = Concept::factory()->for($subject)->for($otherTopic, 'syllabusTopic')->create();
+
+    expect(fn () => app(CurriculumGenerationService::class)->queue(
+        $program,
+        CurriculumGenerationKind::Lessons,
+        [],
+        User::factory()->admin()->create(),
+        subject: $subject,
+        topic: $topic,
+        scopeType: 'topic',
+        scopeId: $topic->id,
+        targetConceptIds: [$concept->id],
+    ))->toThrow(ValidationException::class);
+
+    expect(CurriculumGeneration::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
+});
+
+test('subject-scoped lesson requests include the complete topic tree and selected concepts only', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    $firstTopic = SyllabusTopic::factory()->for($subject)->create(['title' => 'Assets']);
+    SyllabusTopic::factory()->for($subject)->create(['title' => 'Liabilities']);
+    $selectedConcept = Concept::factory()->for($subject)->for($firstTopic, 'syllabusTopic')->create();
+    Concept::factory()->for($subject)->create();
+
+    $generation = app(CurriculumGenerationService::class)->queue(
+        $program,
+        CurriculumGenerationKind::Lessons,
+        [],
+        User::factory()->admin()->create(),
+        subject: $subject,
+        scopeType: 'subject',
+        scopeId: $subject->id,
+        targetConceptIds: [$selectedConcept->id],
+    );
+
+    expect($generation->scope_snapshot['scope_type'])->toBe('subject')
+        ->and($generation->scope_snapshot['scope_id'])->toBe($subject->id)
+        ->and($generation->scope_snapshot['topics'])->toHaveCount(2)
+        ->and($generation->scope_snapshot['target_concept_ids'])->toBe([$selectedConcept->id])
+        ->and($generation->scope_snapshot['concepts'])->toHaveCount(1);
+});
+
+test('lesson proposals become stale when selected concept context changes before review', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    $topic = SyllabusTopic::factory()->for($subject)->create(['title' => 'Assets']);
+    $concept = Concept::factory()->for($subject)->for($topic, 'syllabusTopic')->create([
+        'description' => 'The original reviewed concept context.',
+    ]);
+    $reviewer = User::factory()->admin()->create();
+    $generation = app(CurriculumGenerationService::class)->queue(
+        $program,
+        CurriculumGenerationKind::Lessons,
+        [],
+        $reviewer,
+        subject: $subject,
+        scopeType: 'concept',
+        scopeId: $concept->id,
+        targetConceptIds: [$concept->id],
+    );
+    CurriculumProposalGenerator::fake([[
+        'items' => [[
+            'draft_id' => 'lesson-context-stale',
+            'concept_id' => $concept->id,
+            'title' => 'A lesson based on the original concept',
+            'summary' => 'A summary based on the original description.',
+            'sections' => [['heading' => 'Core idea', 'explanation' => 'Explain the original idea.', 'example' => null]],
+            'common_misconceptions' => [],
+            'recap' => 'Review the original concept.',
+        ]],
+    ]]);
+    $service = app(CurriculumGenerationService::class);
+    $service->generate($generation->id);
+    $concept->update(['description' => 'The concept has changed since drafting.']);
+
+    $service->review($generation->fresh(), hash('sha256', json_encode($generation->fresh()->proposal, JSON_THROW_ON_ERROR)), [[
+        'draft_id' => 'lesson-context-stale',
+        'include' => true,
+        'title' => 'A lesson based on the original concept',
+        'summary' => 'A summary based on the original description.',
+        'sections' => [['heading' => 'Core idea', 'explanation' => 'Explain the original idea.', 'example' => null]],
+        'common_misconceptions' => [],
+        'recap' => 'Review the original concept.',
+        'sort_order' => 0,
+    ]], User::factory()->admin()->create());
+
+    expect($generation->fresh()->status)->toBe(CurriculumGenerationStatus::Stale)
+        ->and($generation->fresh()->error_code)->toBe('scope_changed')
+        ->and(Lesson::query()->count())->toBe(0);
+});
+
+test('lesson duplicate conflicts do not block approval of other selected concepts', function () {
+    Queue::fake([GenerateCurriculumProposal::class]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    $topic = SyllabusTopic::factory()->for($subject)->create(['title' => 'Financial reporting']);
+    $duplicateConcept = Concept::factory()->for($subject)->for($topic, 'syllabusTopic')->create();
+    $independentConcept = Concept::factory()->for($subject)->for($topic, 'syllabusTopic')->create();
+    Lesson::factory()->for($duplicateConcept)->create(['title' => 'Existing lesson title']);
+    $admin = User::factory()->admin()->create();
+    $generation = app(CurriculumGenerationService::class)->queue(
+        $program,
+        CurriculumGenerationKind::Lessons,
+        [],
+        $admin,
+        subject: $subject,
+        scopeType: 'subject',
+        scopeId: $subject->id,
+        targetConceptIds: [$duplicateConcept->id, $independentConcept->id],
+    );
+    CurriculumProposalGenerator::fake([[
+        'items' => [
+            [
+                'draft_id' => 'duplicate-lesson', 'concept_id' => $duplicateConcept->id,
+                'title' => 'Existing lesson title', 'summary' => 'A duplicate.',
+                'sections' => [['heading' => 'Duplicate', 'explanation' => 'Already exists.', 'example' => null]],
+                'common_misconceptions' => [], 'recap' => 'Already exists.',
+            ],
+            [
+                'draft_id' => 'independent-lesson', 'concept_id' => $independentConcept->id,
+                'title' => 'Independent lesson', 'summary' => 'A distinct lesson.',
+                'sections' => [['heading' => 'Core idea', 'explanation' => 'A new explanation.', 'example' => null]],
+                'common_misconceptions' => [], 'recap' => 'Review the core idea.',
+            ],
+        ],
+    ]]);
+    $service = app(CurriculumGenerationService::class);
+    $service->generate($generation->id);
+    $proposal = $generation->fresh()->proposal;
+    $service->review($generation->fresh(), hash('sha256', json_encode($proposal, JSON_THROW_ON_ERROR)), [
+        ['draft_id' => 'duplicate-lesson', 'include' => true, 'title' => 'Existing lesson title', 'summary' => 'A duplicate.', 'sections' => $proposal['items'][0]['sections'], 'common_misconceptions' => [], 'recap' => 'Already exists.', 'sort_order' => 0],
+        ['draft_id' => 'independent-lesson', 'include' => true, 'title' => 'Independent lesson', 'summary' => 'An author-edited distinct lesson.', 'sections' => $proposal['items'][1]['sections'], 'common_misconceptions' => [], 'recap' => 'Review the core idea.', 'sort_order' => 1],
+    ], $admin);
+
+    $reviewed = $generation->fresh();
+    expect($reviewed->status)->toBe(CurriculumGenerationStatus::Reviewing)
+        ->and($reviewed->reviewed_proposal['items'][0]['decision'])->toBe('conflict')
+        ->and($reviewed->reviewed_proposal['items'][1]['decision'])->toBe('approved')
+        ->and(Lesson::query()->where('concept_id', $independentConcept->id)->where('title', 'Independent lesson')->exists())->toBeTrue();
 });
 
 test('concept requests reject a topic tree that exceeds configured input bounds', function () {

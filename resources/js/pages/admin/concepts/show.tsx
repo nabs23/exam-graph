@@ -5,6 +5,7 @@ import { conceptObjectives as objectives } from '@/lib/curriculum-routes';
 import { conceptQuestions as questions } from '@/lib/curriculum-routes';
 import { conceptQuizzes as quizzes } from '@/lib/curriculum-routes';
 import { concepts } from '@/lib/curriculum-routes';
+import generations from '@/routes/programs/curriculum-generations';
 
 type Concept = {
     id: number;
@@ -20,6 +21,7 @@ type Concept = {
     }[];
     quizzes: { id: number; title: string; questions: { id: number }[] }[];
     prerequisites: { id: number; code: string; title: string }[];
+    subject: { id: number; program_id: number };
 };
 export default function Concept({ concept }: { concept: Concept }) {
     const lesson = useForm({
@@ -46,6 +48,7 @@ export default function Concept({ concept }: { concept: Concept }) {
                 </p>
             </section>
             <nav className="flex flex-wrap gap-2">
+                <Link href={generations.create(concept.subject.program_id, { query: { kind: 'lessons', subject_id: concept.subject.id, scope_type: 'concept', scope_id: concept.id } })} className="rounded border px-3 py-2 text-sm">Draft lesson</Link>
                 <Link
                     href={lessons.index(concept)}
                     className="rounded border px-3 py-2 text-sm"
