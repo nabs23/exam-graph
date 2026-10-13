@@ -8,6 +8,7 @@ use App\Http\Requests\ReviewCurriculumGenerationRequest;
 use App\Http\Requests\StoreCurriculumGenerationRequest;
 use App\Models\Concept;
 use App\Models\CurriculumGeneration;
+use App\Models\Lesson;
 use App\Models\Program;
 use App\Models\ProgramFile;
 use App\Models\Subject;
@@ -131,6 +132,26 @@ class CurriculumGenerationController extends Controller
         $proposalHash = $curriculumGeneration->proposal === null
             ? null
             : hash('sha256', json_encode($curriculumGeneration->proposal, JSON_THROW_ON_ERROR));
+        $existingLessonsByConcept = [];
+        if ($curriculumGeneration->kind === CurriculumGenerationKind::Lessons) {
+            $conceptIds = collect($curriculumGeneration->scope_snapshot['target_concept_ids'] ?? [])
+                ->map(fn (mixed $id): int => (int) $id)
+                ->all();
+            $existingLessonsByConcept = Lesson::query()
+                ->whereIn('concept_id', $conceptIds)
+                ->where(fn ($query) => $query
+                    ->whereNull('curriculum_generation_id')
+                    ->orWhere('curriculum_generation_id', '!=', $curriculumGeneration->id))
+                ->orderBy('title')
+                ->get(['id', 'concept_id', 'curriculum_generation_id', 'title'])
+                ->groupBy('concept_id')
+                ->map(fn ($lessons) => $lessons->map(fn (Lesson $lesson): array => [
+                    'id' => $lesson->id,
+                    'title' => $lesson->title,
+                    'generation_id' => $lesson->curriculum_generation_id,
+                ])->values()->all())
+                ->all();
+        }
 
         return Inertia::render('admin/curriculum-generations/show', [
             'program' => $program->only(['id', 'name', 'code']),
@@ -138,6 +159,7 @@ class CurriculumGenerationController extends Controller
             'sourceFiles' => $snapshotFiles,
             'proposalHash' => $proposalHash,
             'canReview' => $curriculumGeneration->status === CurriculumGenerationStatus::Reviewing,
+            'existingLessonsByConcept' => $existingLessonsByConcept,
         ]);
     }
 
