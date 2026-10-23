@@ -31,13 +31,13 @@ export function PageHeader({
 }: PageHeaderProps) {
     return (
         <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
                 {eyebrow && (
-                    <p className="text-sm font-medium uppercase tracking-wide text-primary">
+                    <p className="wrap-break-words text-sm font-medium tracking-wide text-primary uppercase">
                         {eyebrow}
                     </p>
                 )}
-                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                <h1 className="wrap-break-words text-2xl font-semibold tracking-tight sm:text-3xl">
                     {title}
                 </h1>
                 {description && (
@@ -46,7 +46,11 @@ export function PageHeader({
                     </p>
                 )}
             </div>
-            {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+            {actions && (
+                <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto sm:max-w-[45%]">
+                    {actions}
+                </div>
+            )}
         </header>
     );
 }

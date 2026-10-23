@@ -9,6 +9,7 @@ use App\Services\SubjectTopicExtractionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -20,7 +21,17 @@ class SubjectController extends Controller
      */
     public function index(?Program $program = null): Response
     {
-        return Inertia::render('admin/subjects/index', ['subjects' => Subject::query()->when($program, fn (Builder $query): Builder => $query->where('program_id', $program->id))->with('program:id,name,code')->orderBy('sort_order')->get(), 'contextProgram' => $program, 'programs' => $program ? collect([$program]) : Program::query()->orderBy('name')->get(['id', 'name', 'code'])]);
+        $subjects = Subject::query()
+            ->when($program, fn (Builder $query): Builder => $query->where('subjects.program_id', $program->id))
+            ->join('programs', 'subjects.program_id', '=', 'programs.id')
+            ->select('subjects.*')
+            ->with('program:id,name,code')
+            ->orderBy('programs.name')
+            ->orderBy('subjects.sort_order')
+            ->orderBy('subjects.id')
+            ->get();
+
+        return Inertia::render('admin/subjects/index', ['subjects' => $subjects, 'contextProgram' => $program, 'programs' => $program ? collect([$program]) : Program::query()->orderBy('name')->get(['id', 'name', 'code'])]);
     }
 
     /**
@@ -41,6 +52,7 @@ class SubjectController extends Controller
             $data['program_id'] = $program->id;
         }
         $subject = Subject::create($data);
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'The subject was created.']);
 
         return redirect()->to($subject->curriculumRoute('subjects.show'));
     }
@@ -71,9 +83,14 @@ class SubjectController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Program $program, Subject $subject): Response
+    public function edit(Request $request, Program $program, Subject $subject): Response
     {
-        return Inertia::render('admin/subjects/edit', ['subject' => $subject, 'programs' => Program::query()->orderBy('name')->get(['id', 'name', 'code'])]);
+        return Inertia::render('admin/subjects/edit', [
+            'subject' => $subject,
+            'programs' => Program::query()->orderBy('name')->get(['id', 'name', 'code']),
+            'deleteBlockedReason' => $this->deleteBlockedReason($subject),
+            'returnTab' => $this->workspaceTab($request->query('tab')),
+        ]);
     }
 
     /**
@@ -87,18 +104,66 @@ class SubjectController extends Controller
         }
 
         $subject->update($data);
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Subject changes were saved.']);
 
-        return redirect()->to($subject->curriculumRoute('subjects.show'));
+        $returnTab = $this->workspaceTab($request->query('tab'));
+
+        return to_route('subjects.show', array_filter([
+            'program' => $subject->program_id,
+            'subject' => $subject->id,
+            'tab' => $returnTab,
+        ]));
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Program $program, Subject $subject): RedirectResponse
+    public function destroy(Request $request, Program $program, Subject $subject): RedirectResponse
     {
-        abort_if($subject->concepts()->exists() || $subject->syllabusTopics()->exists() || $subject->files()->exists() || $subject->programFiles()->exists() || $subject->topicExtractions()->exists(), 422, 'Remove the subject content and source files before deleting it.');
+        $blockedReason = $this->deleteBlockedReason($subject);
+
+        if ($blockedReason !== null) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => $blockedReason]);
+
+            return to_route('subjects.edit', array_filter([
+                'program' => $program,
+                'subject' => $subject,
+                'tab' => $this->workspaceTab($request->query('tab')),
+            ]));
+        }
+
         $subject->delete();
 
-        return to_route('subjects.index');
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'The subject was deleted.']);
+
+        return to_route('programs.subjects.index', $program);
+    }
+
+    private function deleteBlockedReason(Subject $subject): ?string
+    {
+        if ($subject->concepts()->exists()) {
+            return 'Remove this subject’s instructional concepts before deleting it.';
+        }
+
+        if ($subject->syllabusTopics()->exists()) {
+            return 'Remove this subject’s official syllabus topics before deleting it.';
+        }
+
+        if ($subject->files()->exists() || $subject->programFiles()->exists()) {
+            return 'Remove or reassign this subject’s source files before deleting it.';
+        }
+
+        if ($subject->topicExtractions()->exists()) {
+            return 'Remove this subject’s topic extraction history before deleting it.';
+        }
+
+        return null;
+    }
+
+    private function workspaceTab(mixed $tab): ?string
+    {
+        return is_string($tab) && in_array($tab, ['topics', 'concepts', 'files', 'extraction'], true)
+            ? $tab
+            : null;
     }
 }

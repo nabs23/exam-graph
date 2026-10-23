@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpen,
     ChartNoAxesColumn,
@@ -29,7 +29,7 @@ import study from '@/routes/study';
 import { subjects } from '@/lib/curriculum-routes';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
+const learnerNavItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
@@ -45,6 +45,9 @@ const mainNavItems: NavItem[] = [
         href: progress.index(),
         icon: ChartNoAxesColumn,
     },
+];
+
+const authoringNavItems: NavItem[] = [
     {
         title: 'Programs',
         href: programs.index(),
@@ -81,6 +84,8 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
+    const { auth } = usePage().props;
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -96,7 +101,8 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                <NavMain items={learnerNavItems} label="Learn" />
+                {auth.user.is_admin && <NavMain items={authoringNavItems} label="Authoring" />}
             </SidebarContent>
 
             <SidebarFooter>

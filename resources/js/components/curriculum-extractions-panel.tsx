@@ -1,10 +1,11 @@
-import { Form, Link } from "@inertiajs/react";
+import { Form, Link } from '@inertiajs/react';
 import {
     destroy,
     show,
-} from "@/actions/App/Http/Controllers/CurriculumExtractionController";
-import { Button } from "@/components/ui/button";
-import { CurriculumExtractionForm } from "@/components/curriculum-extraction-form";
+} from '@/actions/App/Http/Controllers/CurriculumExtractionController';
+import { Button } from '@/components/ui/button';
+import { CurriculumExtractionForm } from '@/components/curriculum-extraction-form';
+import programs from '@/routes/programs';
 
 export type CurriculumExtractionSourceFile = {
     id: number;
@@ -39,6 +40,7 @@ export function CurriculumExtractionsPanel({
     program,
     extractions,
     curriculumExtractionEnabled,
+    curriculumExtractionHasSources,
     curriculumExtractionUnavailableReason,
     curriculumExtractionModels,
     curriculumExtractionDefaultModel,
@@ -46,6 +48,7 @@ export function CurriculumExtractionsPanel({
     program: Program;
     extractions: CurriculumExtractionSummary[];
     curriculumExtractionEnabled: boolean;
+    curriculumExtractionHasSources: boolean;
     curriculumExtractionUnavailableReason: string | null;
     curriculumExtractionModels: string[];
     curriculumExtractionDefaultModel: string | null;
@@ -55,76 +58,146 @@ export function CurriculumExtractionsPanel({
             <section className="space-y-3 rounded-xl border bg-card p-5 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 className="text-xl font-semibold">Official curriculum</h2>
+                        <h2 className="text-xl font-semibold">
+                            Official curriculum
+                        </h2>
                         <p className="text-sm text-muted-foreground">
-                            Build one reviewer-controlled proposal from all completed program PDFs.
+                            Prepare a proposal from completed program PDFs. An
+                            authorized reviewer decides what becomes canonical;
+                            the extracted content does not approve or publish
+                            itself.
                         </p>
                     </div>
                     <CurriculumExtractionForm
                         program={program}
-                        enabled={curriculumExtractionEnabled}
+                        enabled={
+                            curriculumExtractionEnabled &&
+                            curriculumExtractionHasSources
+                        }
                         models={curriculumExtractionModels}
                         defaultModel={curriculumExtractionDefaultModel}
                     />
                 </div>
                 {curriculumExtractionUnavailableReason && (
-                    <p className="text-sm text-muted-foreground">
+                    <p
+                        role="status"
+                        className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground"
+                    >
                         {curriculumExtractionUnavailableReason}
                     </p>
+                )}
+                {!curriculumExtractionHasSources && (
+                    <div
+                        role="status"
+                        className="flex flex-col gap-3 rounded-md border border-dashed bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                        <p className="text-sm text-muted-foreground">
+                            Upload a PDF and wait for its text embeddings to
+                            complete before preparing an official curriculum
+                            proposal.
+                        </p>
+                        <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0"
+                        >
+                            <Link
+                                href={programs.show(program, {
+                                    query: { tab: 'files' },
+                                })}
+                            >
+                                Manage source files
+                            </Link>
+                        </Button>
+                    </div>
                 )}
             </section>
 
             {extractions.length === 0 ? (
                 <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">
-                    No curriculum extractions have been requested for this program.
+                    No curriculum extractions have been requested for this
+                    program.
                 </p>
             ) : (
                 <div className="space-y-4">
                     {extractions.map((extraction) => (
                         <article
                             key={extraction.id}
-                            className="block rounded-xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
+                            className="rounded-xl border bg-card p-5 shadow-sm"
                         >
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div>
-                                    <h2 className="font-semibold capitalize">
-                                        {extraction.status.replaceAll("_", " ")}
+                                    <h2
+                                        aria-live="polite"
+                                        className="font-semibold capitalize"
+                                    >
+                                        {extraction.status.replaceAll('_', ' ')}
                                     </h2>
                                     <p className="mt-1 text-sm text-muted-foreground">
-                                        {extraction.provider} · {extraction.model} · {extraction.prompt_version}
+                                        {extraction.provider} ·{' '}
+                                        {extraction.model} ·{' '}
+                                        {extraction.prompt_version}
                                     </p>
                                 </div>
                                 <p className="text-sm text-muted-foreground">
-                                    Requested {formatDate(extraction.created_at)}
+                                    Requested{' '}
+                                    {formatDate(extraction.created_at)}
                                 </p>
                             </div>
                             <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                                 <div>
-                                    <dt className="text-muted-foreground">Requested by</dt>
-                                    <dd>{extraction.requester?.name ?? "Unknown"}</dd>
+                                    <dt className="text-muted-foreground">
+                                        Requested by
+                                    </dt>
+                                    <dd>
+                                        {extraction.requester?.name ??
+                                            'Unknown'}
+                                    </dd>
                                 </div>
                                 <div>
-                                    <dt className="text-muted-foreground">Reviewed by</dt>
-                                    <dd>{extraction.reviewer?.name ?? "Not reviewed"}</dd>
+                                    <dt className="text-muted-foreground">
+                                        Reviewed by
+                                    </dt>
+                                    <dd>
+                                        {extraction.reviewer?.name ??
+                                            'Not reviewed'}
+                                    </dd>
                                 </div>
                                 <div>
-                                    <dt className="text-muted-foreground">Reviewed</dt>
-                                    <dd>{extraction.reviewed_at ? formatDate(extraction.reviewed_at) : "Not reviewed"}</dd>
+                                    <dt className="text-muted-foreground">
+                                        Reviewed
+                                    </dt>
+                                    <dd>
+                                        {extraction.reviewed_at
+                                            ? formatDate(extraction.reviewed_at)
+                                            : 'Not reviewed'}
+                                    </dd>
                                 </div>
                                 <div>
-                                    <dt className="text-muted-foreground">Source snapshot</dt>
-                                    <dd className="font-mono text-xs" title={extraction.source_hash}>
+                                    <dt className="text-muted-foreground">
+                                        Source snapshot
+                                    </dt>
+                                    <dd
+                                        className="font-mono text-xs"
+                                        title={extraction.source_hash}
+                                    >
                                         {shortHash(extraction.source_hash)}
                                     </dd>
                                 </div>
                             </dl>
                             <div className="mt-4">
-                                <p className="text-sm font-medium">Source files</p>
+                                <p className="text-sm font-medium">
+                                    Source files
+                                </p>
                                 <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
                                     {extraction.source_files.map((file) => (
                                         <li key={file.id}>
-                                            {file.title}{" "}
-                                            <span className="font-mono text-xs" title={file.content_hash}>
+                                            {file.title}{' '}
+                                            <span
+                                                className="font-mono text-xs"
+                                                title={file.content_hash}
+                                            >
                                                 {shortHash(file.content_hash)}
                                             </span>
                                         </li>
@@ -133,15 +206,35 @@ export function CurriculumExtractionsPanel({
                             </div>
                             {extraction.error_code && (
                                 <p className="mt-4 text-sm text-destructive">
-                                    {extraction.error_message}
+                                    {extraction.error_message ??
+                                        'The extraction failed. Open it to review the error details.'}
                                 </p>
                             )}
                             <div className="mt-4 flex flex-wrap gap-2">
+                                {extraction.can_delete && (
+                                    <p className="basis-full text-xs text-muted-foreground">
+                                        Deleting removes this extraction record
+                                        and its proposal. Program source files
+                                        remain available.
+                                    </p>
+                                )}
                                 <Button asChild size="sm" variant="outline">
-                                    <Link href={show(extraction.id)}>View extraction</Link>
+                                    <Link href={show(extraction.id)}>
+                                        View extraction
+                                    </Link>
                                 </Button>
                                 {extraction.can_delete && (
-                                    <Form {...destroy.form([program, extraction.id])}>
+                                    <Form
+                                        {...destroy.form([
+                                            program,
+                                            extraction.id,
+                                        ])}
+                                        onBefore={() =>
+                                            window.confirm(
+                                                'Delete this failed or unreviewed curriculum extraction and its proposal? The program source files will remain available.',
+                                            )
+                                        }
+                                    >
                                         {({ processing }) => (
                                             <Button
                                                 type="submit"
@@ -149,7 +242,9 @@ export function CurriculumExtractionsPanel({
                                                 size="sm"
                                                 disabled={processing}
                                             >
-                                                {processing ? "Deleting…" : "Delete extraction"}
+                                                {processing
+                                                    ? 'Deleting…'
+                                                    : 'Delete extraction'}
                                             </Button>
                                         )}
                                     </Form>
@@ -165,8 +260,8 @@ export function CurriculumExtractionsPanel({
 
 function formatDate(value: string): string {
     return new Date(value).toLocaleString(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
+        dateStyle: 'medium',
+        timeStyle: 'short',
     });
 }
 

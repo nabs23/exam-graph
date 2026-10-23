@@ -1,5 +1,12 @@
-import { Link } from "@inertiajs/react";
-import { programSubjects, subjects as subjectRoutes } from '@/lib/curriculum-routes';
+import { Link } from '@inertiajs/react';
+import { Plus } from 'lucide-react';
+import { EmptyState } from '@/components/page-shell';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+    programSubjects,
+    subjects as subjectRoutes,
+} from '@/lib/curriculum-routes';
 
 type Program = {
     id: number;
@@ -18,39 +25,84 @@ export function ProgramSubjectsPanel({
     program: Program;
     subjects: Subject[];
 }) {
+    const subjectCount = subjects.length;
+
     return (
-        <section className="space-y-5">
-            <div className="flex items-center justify-between gap-4">
+        <section aria-labelledby="program-subjects-title" className="space-y-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h2 className="text-xl font-semibold">Subjects</h2>
+                    <h2
+                        id="program-subjects-title"
+                        className="text-xl font-semibold"
+                    >
+                        Subjects
+                    </h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        {subjects.length} {subjects.length === 1 ? "subject" : "subjects"}
+                        {subjectCount}{' '}
+                        {subjectCount === 1 ? 'subject' : 'subjects'} in this
+                        program. Subjects organize the topics, learning
+                        materials, and assessments learners will use.
                     </p>
                 </div>
-                <Link
-                    href={programSubjects.create(program)}
-                    className="shrink-0 text-sm font-medium text-primary hover:underline"
-                >
-                    Create a subject
-                </Link>
+                {subjectCount > 0 && (
+                    <Button asChild className="shrink-0">
+                        <Link href={programSubjects.create(program)}>
+                            <Plus data-icon="inline-start" />
+                            Create subject
+                        </Link>
+                    </Button>
+                )}
             </div>
-            {subjects.length === 0 ? (
-                <div className="rounded-xl border border-dashed py-12 text-center">
-                    <p className="font-medium">No subjects yet</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        Create a subject to start organizing this program’s curriculum.
-                    </p>
-                </div>
+
+            {subjectCount === 0 ? (
+                <EmptyState>
+                    <div className="space-y-3">
+                        <p className="font-medium text-foreground">
+                            This program has no subjects yet
+                        </p>
+                        <p>
+                            Add the first subject to start building its
+                            curriculum. You can then add syllabus topics,
+                            concepts, lessons, and assessments to that subject.
+                        </p>
+                        <Button asChild className="mt-2">
+                            <Link href={programSubjects.create(program)}>
+                                <Plus data-icon="inline-start" />
+                                Create the first subject
+                            </Link>
+                        </Button>
+                    </div>
+                </EmptyState>
             ) : (
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     {subjects.map((subject) => (
                         <Link
                             key={subject.id}
                             href={subjectRoutes.show(subject)}
-                            className="rounded-xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/50 hover:bg-accent"
+                            className="group min-w-0 rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
                         >
-                            {subject.code && <b>{subject.code}</b>}
-                            <p className="mt-1 font-medium">{subject.name}</p>
+                            <Card className="h-full py-0 transition-colors group-hover:border-primary/50 group-hover:bg-accent/50">
+                                <CardContent className="flex h-full min-h-32 flex-col justify-between gap-5 py-5">
+                                    <div className="space-y-2">
+                                        {subject.code ? (
+                                            <p className="wrap-break-words text-sm font-semibold tracking-wide text-primary">
+                                                {subject.code}
+                                            </p>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground">
+                                                Subject
+                                            </p>
+                                        )}
+                                        <h3 className="wrap-break-words font-semibold tracking-tight">
+                                            {subject.name}
+                                        </h3>
+                                    </div>
+                                    <span className="text-sm font-medium text-primary">
+                                        Open subject{' '}
+                                        <span aria-hidden="true">→</span>
+                                    </span>
+                                </CardContent>
+                            </Card>
                         </Link>
                     ))}
                 </div>

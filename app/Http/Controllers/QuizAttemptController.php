@@ -14,7 +14,7 @@ class QuizAttemptController extends Controller
 {
     public function show(Quiz $quiz): Response
     {
-        return Inertia::render('study/quiz', ['quiz' => $quiz->load(['concept.subject', 'questions.choices'])]);
+        return Inertia::render('study/quiz', ['quiz' => $quiz->load(['concept.subject.program', 'concept.syllabusTopic', 'questions.choices'])]);
     }
 
     public function store(QuizAttemptRequest $request, Quiz $quiz, SubmitQuizAttempt $submitQuizAttempt): RedirectResponse
@@ -28,6 +28,6 @@ class QuizAttemptController extends Controller
     {
         abort_unless($attempt->user_id === auth()->id(), 403);
 
-        return Inertia::render('study/result', ['attempt' => $attempt->load(['quiz.concept', 'answers.question.choices', 'answers.questionChoice'])]);
+        return Inertia::render('study/result', ['attempt' => $attempt->load(['quiz.concept.subject.program', 'quiz.concept.syllabusTopic', 'answers.question.choices', 'answers.questionChoice'])]);
     }
 }

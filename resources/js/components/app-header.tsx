@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, Menu } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { Breadcrumbs } from '@/components/breadcrumbs';
@@ -81,6 +81,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                     variant="ghost"
                                     size="icon"
                                     className="mr-2 h-[34px] w-[34px]"
+                                    aria-label="Open navigation menu"
                                 >
                                     <Menu className="h-5 w-5" />
                                 </Button>
@@ -102,7 +103,16 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                                 <Link
                                                     key={item.title}
                                                     href={item.href}
-                                                    className="flex items-center space-x-2 font-medium"
+                                                    aria-current={
+                                                        isCurrentUrl(item.href)
+                                                            ? 'page'
+                                                            : undefined
+                                                    }
+                                                    className={cn(
+                                                        'flex items-center space-x-2 rounded-md px-2 py-2 font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none',
+                                                        isCurrentUrl(item.href) &&
+                                                            activeItemStyles,
+                                                    )}
                                                 >
                                                     {item.icon && (
                                                         <item.icon className="h-5 w-5" />
@@ -119,7 +129,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                                     href={toUrl(item.href)}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="flex items-center space-x-2 font-medium"
+                                                    className="flex items-center space-x-2 rounded-md px-2 py-2 font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
                                                 >
                                                     {item.icon && (
                                                         <item.icon className="h-5 w-5" />
@@ -137,7 +147,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                     <Link
                         href={dashboard()}
                         prefetch
-                        className="flex items-center space-x-2"
+                        className="flex items-center space-x-2 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
                     >
                         <AppLogo />
                     </Link>
@@ -153,6 +163,11 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                     >
                                         <Link
                                             href={item.href}
+                                            aria-current={
+                                                isCurrentUrl(item.href)
+                                                    ? 'page'
+                                                    : undefined
+                                            }
                                             className={cn(
                                                 navigationMenuTriggerStyle(),
                                                 whenCurrentUrl(
@@ -177,44 +192,36 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                     </div>
 
                     <div className="ml-auto flex items-center space-x-2">
-                        <div className="relative flex items-center space-x-1">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="group h-9 w-9 cursor-pointer"
-                            >
-                                <Search className="!size-5 opacity-80 group-hover:opacity-100" />
-                            </Button>
-                            <div className="ml-1 hidden gap-1 lg:flex">
-                                {rightNavItems.map((item) => (
-                                    <Tooltip key={item.title}>
-                                        <TooltipTrigger>
-                                            <a
-                                                href={toUrl(item.href)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="group inline-flex h-9 w-9 items-center justify-center rounded-md bg-transparent p-0 text-sm font-medium text-accent-foreground ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
-                                            >
-                                                <span className="sr-only">
-                                                    {item.title}
-                                                </span>
-                                                {item.icon && (
-                                                    <item.icon className="size-5 opacity-80 group-hover:opacity-100" />
-                                                )}
-                                            </a>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>{item.title}</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                ))}
-                            </div>
+                        <div className="ml-1 hidden gap-1 lg:flex">
+                            {rightNavItems.map((item) => (
+                                <Tooltip key={item.title}>
+                                    <TooltipTrigger>
+                                        <a
+                                            href={toUrl(item.href)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="group inline-flex h-9 w-9 items-center justify-center rounded-md bg-transparent p-0 text-sm font-medium text-accent-foreground ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+                                        >
+                                            <span className="sr-only">
+                                                {item.title}
+                                            </span>
+                                            {item.icon && (
+                                                <item.icon className="size-5 opacity-80 group-hover:opacity-100" />
+                                            )}
+                                        </a>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>{item.title}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            ))}
                         </div>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
                                     className="size-10 rounded-full p-1"
+                                    aria-label={`Open user menu for ${auth.user?.name ?? 'account'}`}
                                 >
                                     <Avatar className="size-8 overflow-hidden rounded-full">
                                         <AvatarImage

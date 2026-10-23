@@ -19,6 +19,17 @@ beforeEach(function (): void {
     ]);
 });
 
+test('generation setup exposes the configured source file selection limit', function () {
+    config(['ai.curriculum_generation.max_files' => 2]);
+    $program = Program::factory()->create();
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->get(route('programs.curriculum-generations.create', $program))
+        ->assertInertia(fn ($page) => $page
+            ->component('admin/curriculum-generations/create')
+            ->where('maxSourceFiles', 2));
+});
+
 test('admins can open the generation workflow and queue a scoped proposal', function () {
     Queue::fake([GenerateCurriculumProposal::class]);
     $program = Program::factory()->create();

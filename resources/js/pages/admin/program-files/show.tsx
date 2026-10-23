@@ -1,5 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { embed as embedProgramFile } from '@/actions/App/Http/Controllers/ProgramFileController';
+import InputError from '@/components/input-error';
+import { PageHeader, PageShell } from '@/components/page-shell';
 import { Button } from '@/components/ui/button';
 import { SourceFile, SourceFileDeleteButton } from '@/components/source-files';
 import { useFileEmbeddingPolling } from '@/components/source-files';
@@ -16,15 +18,26 @@ export default function ProgramFileShow({
     embeddingPageCount,
     subjects,
 }: {
-    file: SourceFile & { program: { id: number; name: string; code: string }; subject_id?: number | null };
+    file: SourceFile & {
+        program: { id: number; name: string; code: string };
+        subject_id?: number | null;
+    };
     subjects: { id: number; name: string }[];
     fileEmbeddingsEnabled: boolean;
     embeddingUnavailableReason: string | null;
-    embeddingPreviews: { page_number: number; model: string; dimensions: number; excerpt: string; values: number[] }[];
+    embeddingPreviews: {
+        page_number: number;
+        model: string;
+        dimensions: number;
+        excerpt: string;
+        values: number[];
+    }[];
     embeddingDataBytes: number | null;
     embeddingPageCount: number | null;
 }) {
-    const embeddingInProgress = ['queued', 'processing'].includes(file.embedding_status);
+    const embeddingInProgress = ['queued', 'processing'].includes(
+        file.embedding_status,
+    );
     const embeddingDisabledReason = getEmbeddingDisabledReason(
         file,
         embeddingInProgress,
@@ -33,36 +46,31 @@ export default function ProgramFileShow({
     );
     const canRequestEmbedding = embeddingDisabledReason === null;
 
-    useFileEmbeddingPolling(
-        embeddingInProgress,
-        ['file', 'embeddingPreviews', 'embeddingDataBytes', 'embeddingPageCount'],
-    );
+    useFileEmbeddingPolling(embeddingInProgress, [
+        'file',
+        'embeddingPreviews',
+        'embeddingDataBytes',
+        'embeddingPageCount',
+    ]);
 
     return (
-        <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <PageShell className="mx-auto max-w-6xl">
             <Head title={file.title} />
-            <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    <p className="text-sm font-medium uppercase tracking-wide text-primary">
-                        {file.program.code}
-                    </p>
-                    <h1 className="text-3xl font-semibold tracking-tight">
-                        {file.title}
-                    </h1>
-                    <p className="mt-2 break-all text-muted-foreground">
-                        {file.original_filename}
-                    </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                    <SourceFileDeleteButton file={file} />
-                    <Link
-                        href={programUploads.index(file.program)}
-                        className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent"
-                    >
-                        Back to files
-                    </Link>
-                </div>
-            </header>
+            <PageHeader
+                eyebrow={`${file.program.code} · ${file.program.name}`}
+                title={file.title}
+                description={file.original_filename}
+                actions={
+                    <>
+                        <SourceFileDeleteButton file={file} />
+                        <Button asChild variant="outline">
+                            <Link href={programUploads.index(file.program)}>
+                                Back to files
+                            </Link>
+                        </Button>
+                    </>
+                }
+            />
             <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-xl border bg-card p-4 shadow-sm">
                     <dt className="text-sm text-muted-foreground">File type</dt>
@@ -71,17 +79,25 @@ export default function ProgramFileShow({
                     </dd>
                 </div>
                 <div className="rounded-xl border bg-card p-4 shadow-sm">
-                    <dt className="text-sm text-muted-foreground">Original filename</dt>
-                    <dd className="mt-1 break-all font-medium">{file.original_filename}</dd>
+                    <dt className="text-sm text-muted-foreground">
+                        Original filename
+                    </dt>
+                    <dd className="mt-1 font-medium break-all">
+                        {file.original_filename}
+                    </dd>
                 </div>
                 <div className="rounded-xl border bg-card p-4 shadow-sm">
-                    <dt className="text-sm text-muted-foreground">Upload status</dt>
+                    <dt className="text-sm text-muted-foreground">
+                        Upload status
+                    </dt>
                     <dd className="mt-1 font-medium capitalize">
                         {file.upload_status.replaceAll('_', ' ')}
                     </dd>
                 </div>
                 <div className="rounded-xl border bg-card p-4 shadow-sm">
-                    <dt className="text-sm text-muted-foreground">Embeddings</dt>
+                    <dt className="text-sm text-muted-foreground">
+                        Embeddings
+                    </dt>
                     <dd className="mt-1 font-medium capitalize">
                         {file.embedding_status.replaceAll('_', ' ')}
                     </dd>
@@ -89,50 +105,135 @@ export default function ProgramFileShow({
                 <div className="rounded-xl border bg-card p-4 shadow-sm">
                     <dt className="text-sm text-muted-foreground">File size</dt>
                     <dd className="mt-1 font-medium">
-                        {file.file_size === null ? 'Size pending' : `${(file.file_size / 1048576).toFixed(1)} MiB`}
+                        {file.file_size === null
+                            ? 'Size pending'
+                            : `${(file.file_size / 1048576).toFixed(1)} MiB`}
                     </dd>
                 </div>
                 <div className="rounded-xl border bg-card p-4 shadow-sm">
                     <dt className="text-sm text-muted-foreground">Uploaded</dt>
                     <dd className="mt-1 font-medium">
                         {file.uploaded_at
-                            ? new Date(file.uploaded_at).toLocaleDateString(undefined, {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                            })
+                            ? new Date(file.uploaded_at).toLocaleDateString(
+                                  undefined,
+                                  {
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric',
+                                  },
+                              )
                             : file.upload_status.replaceAll('_', ' ')}
                     </dd>
                 </div>
                 <div className="rounded-xl border bg-card p-4 shadow-sm">
-                    <dt className="text-sm text-muted-foreground">Uploaded by</dt>
-                    <dd className="mt-1 font-medium">{file.uploader?.name ?? 'Unknown'}</dd>
+                    <dt className="text-sm text-muted-foreground">
+                        Uploaded by
+                    </dt>
+                    <dd className="mt-1 font-medium">
+                        {file.uploader?.name ?? 'Unknown'}
+                    </dd>
                 </div>
             </dl>
 
-            <Form {...programFiles.update.form(file.id)} className="flex flex-wrap items-end gap-4 rounded-xl border bg-card p-5 shadow-sm">
-                <label className="min-w-48 flex-1 text-sm font-medium">
-                    <span className="mb-1.5 block">File type</span>
-                    <select name="file_type" defaultValue={file.file_type ?? "other"} className="block w-full rounded-lg border-input bg-background px-3 py-2 text-sm shadow-sm">
-                        {["reviewer_ebook", "reviewer_notes", "lecture_material", "official_reference", "practice_material", "other"].map((type) => <option key={type} value={type}>{type.replaceAll("_", " ")}</option>)}
-                    </select>
-                </label>
-                <label className="min-w-48 flex-1 text-sm font-medium">
-                    <span className="mb-1.5 block">Subject scope</span>
-                    <select name="subject_id" defaultValue={file.subject_id?.toString() ?? ""} className="block w-full rounded-lg border-input bg-background px-3 py-2 text-sm shadow-sm">
-                        <option value="">Shared across program</option>
-                        {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
-                    </select>
-                </label>
-                <input type="hidden" name="title" value={file.title} />
-                <Button type="submit" variant="outline">Save file classification</Button>
+            <Form
+                {...programFiles.update.form(file.id)}
+                className="flex flex-wrap items-end gap-4 rounded-xl border bg-card p-5 shadow-sm"
+            >
+                {({ processing, recentlySuccessful, errors }) => (
+                    <>
+                        <label className="min-w-48 flex-1 text-sm font-medium">
+                            <span className="mb-1.5 block">
+                                Source category
+                            </span>
+                            <select
+                                id="program-file-type"
+                                name="file_type"
+                                defaultValue={file.file_type ?? 'other'}
+                                disabled={processing}
+                                aria-invalid={Boolean(errors.file_type)}
+                                aria-describedby={
+                                    errors.file_type
+                                        ? 'program-file-type-error'
+                                        : undefined
+                                }
+                                className="block w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-destructive"
+                            >
+                                {[
+                                    'reviewer_ebook',
+                                    'reviewer_notes',
+                                    'lecture_material',
+                                    'official_reference',
+                                    'practice_material',
+                                    'other',
+                                ].map((type) => (
+                                    <option key={type} value={type}>
+                                        {type.replaceAll('_', ' ')}
+                                    </option>
+                                ))}
+                            </select>
+                            <InputError
+                                id="program-file-type-error"
+                                message={errors.file_type}
+                            />
+                        </label>
+                        <label className="min-w-48 flex-1 text-sm font-medium">
+                            <span className="mb-1.5 block">Subject scope</span>
+                            <select
+                                id="program-file-subject"
+                                name="subject_id"
+                                defaultValue={file.subject_id?.toString() ?? ''}
+                                disabled={processing}
+                                aria-invalid={Boolean(errors.subject_id)}
+                                aria-describedby={
+                                    errors.subject_id
+                                        ? 'program-file-subject-error'
+                                        : undefined
+                                }
+                                className="block w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-destructive"
+                            >
+                                <option value="">Shared across program</option>
+                                {subjects.map((subject) => (
+                                    <option key={subject.id} value={subject.id}>
+                                        {subject.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <InputError
+                                id="program-file-subject-error"
+                                message={errors.subject_id}
+                            />
+                        </label>
+                        <input type="hidden" name="title" value={file.title} />
+                        <Button
+                            type="submit"
+                            variant="outline"
+                            disabled={processing}
+                        >
+                            {processing
+                                ? 'Saving…'
+                                : 'Save file classification'}
+                        </Button>
+                        {(processing || recentlySuccessful) && (
+                            <p
+                                role="status"
+                                aria-live="polite"
+                                className="w-full text-sm text-muted-foreground"
+                            >
+                                {processing
+                                    ? 'Saving file classification…'
+                                    : 'File classification saved.'}
+                            </p>
+                        )}
+                    </>
+                )}
             </Form>
 
             <section className="space-y-4 rounded-xl border bg-card p-5 shadow-sm">
                 <div>
                     <h2 className="font-semibold">Text embeddings</h2>
                     <p className="text-sm text-muted-foreground">
-                        Extract each PDF page’s text and create one VoyageAI vector for every page with usable text.
+                        Extract each PDF page’s text and create one VoyageAI
+                        vector for every page with usable text.
                     </p>
                 </div>
                 <p className="text-sm" aria-live="polite">
@@ -142,13 +243,16 @@ export default function ProgramFileShow({
                     <p role="alert" className="text-sm text-destructive">
                         {file.embedding_error_code === 'no_extractable_text'
                             ? 'No readable text was found in this PDF. Upload a PDF with a text layer, then retry.'
-                            : file.embedding_error_code === 'pdf_page_limit_exceeded'
+                            : file.embedding_error_code ===
+                                'pdf_page_limit_exceeded'
                               ? 'This PDF exceeded the page-processing limit when embedding was attempted. Retry after increasing the configured limit.'
-                              : file.embedding_error_code === 'provider_rate_limited'
+                              : file.embedding_error_code ===
+                                  'provider_rate_limited'
                                 ? 'VoyageAI’s rate limit was reached. Check the account’s request and token limits, then retry.'
-                              : file.embedding_error_code === 'provider_failed'
-                                ? 'VoyageAI could not complete the embedding request. You can retry this file.'
-                                : 'Embedding failed. You can retry this file.'}
+                                : file.embedding_error_code ===
+                                    'provider_failed'
+                                  ? 'VoyageAI could not complete the embedding request. You can retry this file.'
+                                  : 'Embedding failed. You can retry this file.'}
                     </p>
                 )}
                 {file.mime_type !== 'application/pdf' && (
@@ -158,22 +262,42 @@ export default function ProgramFileShow({
                 )}
                 {embeddingPreviews.length > 0 && (
                     <div className="space-y-3">
-                        <h3 className="text-sm font-medium">Saved text embedding preview</h3>
+                        <h3 className="text-sm font-medium">
+                            Saved text embedding preview
+                        </h3>
                         {embeddingDataBytes !== null && (
                             <p className="text-sm text-muted-foreground">
-                                Stored vector payload: {formatBytes(embeddingDataBytes)} across {embeddingPageCount} pages.
+                                Stored vector payload:{' '}
+                                {formatBytes(embeddingDataBytes)} across{' '}
+                                {embeddingPageCount} pages.
                             </p>
                         )}
                         {embeddingPreviews.map((preview) => (
-                            <div key={preview.page_number} className="rounded-md bg-muted p-3 text-sm">
-                                <p>Page {preview.page_number} · {preview.model} · {preview.dimensions} dimensions</p>
-                                <p className="mt-1 text-muted-foreground">{preview.excerpt}</p>
-                                <code className="mt-1 block break-all text-xs text-muted-foreground">
-                                    [{preview.values.map((value) => Number(value).toFixed(5)).join(', ')}, …]
+                            <div
+                                key={preview.page_number}
+                                className="rounded-md bg-muted p-3 text-sm"
+                            >
+                                <p>
+                                    Page {preview.page_number} · {preview.model}{' '}
+                                    · {preview.dimensions} dimensions
+                                </p>
+                                <p className="mt-1 text-muted-foreground">
+                                    {preview.excerpt}
+                                </p>
+                                <code className="mt-1 block text-xs break-all text-muted-foreground">
+                                    [
+                                    {preview.values
+                                        .map((value) =>
+                                            Number(value).toFixed(5),
+                                        )
+                                        .join(', ')}
+                                    , …]
                                 </code>
                             </div>
                         ))}
-                        <p className="text-xs text-muted-foreground">Showing the first 8 values for up to 5 pages.</p>
+                        <p className="text-xs text-muted-foreground">
+                            Showing the first 8 values for up to 5 pages.
+                        </p>
                     </div>
                 )}
                 <Form {...embedProgramFile.form(file.id)}>
@@ -182,13 +306,23 @@ export default function ProgramFileShow({
                             <Button
                                 type="submit"
                                 disabled={!canRequestEmbedding || processing}
-                                aria-describedby={embeddingDisabledReason ? 'embedding-initiation-reason' : undefined}
+                                aria-describedby={
+                                    embeddingDisabledReason
+                                        ? 'embedding-initiation-reason'
+                                        : undefined
+                                }
                                 variant="outline"
                             >
-                                {processing ? 'Queueing…' : 'Generate embeddings'}
+                                {processing
+                                    ? 'Queueing…'
+                                    : 'Generate embeddings'}
                             </Button>
                             {embeddingDisabledReason && (
-                                <p id="embedding-initiation-reason" className="text-sm text-muted-foreground" aria-live="polite">
+                                <p
+                                    id="embedding-initiation-reason"
+                                    className="text-sm text-muted-foreground"
+                                    aria-live="polite"
+                                >
                                     {embeddingDisabledReason}
                                 </p>
                             )}
@@ -196,8 +330,7 @@ export default function ProgramFileShow({
                     )}
                 </Form>
             </section>
-
-        </main>
+        </PageShell>
     );
 }
 
@@ -233,16 +366,28 @@ function getEmbeddingDisabledReason(
     }
 
     if (!embeddingsAvailable) {
-        return availabilityReason ?? 'Embedding requirements are not available.';
+        return (
+            availabilityReason ?? 'Embedding requirements are not available.'
+        );
     }
 
     return null;
 }
 
-ProgramFileShow.layout = (props: { file: SourceFile & { program: { id: number; name: string } } }) => ({
+ProgramFileShow.layout = (props: {
+    file: SourceFile & { program: { id: number; name: string } };
+}) => ({
     breadcrumbs: [
-        { title: 'Program', href: programs.show(props.file.program) },
-        { title: 'Program files', href: programUploads.index(props.file.program) },
+        {
+            title: 'Program',
+            href: programs.show(props.file.program, {
+                query: { tab: 'files' },
+            }),
+        },
+        {
+            title: 'Program files',
+            href: programUploads.index(props.file.program),
+        },
         { title: 'File', href: programFiles.show(props.file) },
     ],
 });

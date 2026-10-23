@@ -28,8 +28,6 @@ export default function Profile({
         <>
             <Head title="Profile settings" />
 
-            <h1 className="sr-only">Profile settings</h1>
-
             <div className="space-y-6">
                 <Heading
                     variant="small"
@@ -102,7 +100,7 @@ export default function Profile({
 
                                         {status ===
                                             'verification-link-sent' && (
-                                            <div className="mt-2 text-sm font-medium text-green-600">
+                                            <div role="status" aria-live="polite" className="mt-2 text-sm font-medium text-green-600">
                                                 A new verification link has been
                                                 sent to your email address.
                                             </div>

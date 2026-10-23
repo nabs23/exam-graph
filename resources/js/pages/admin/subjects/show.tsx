@@ -1,62 +1,174 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { PageHeader, PageShell } from '@/components/page-shell';
+import { Button } from '@/components/ui/button';
 import { SubjectConceptsPanel } from '@/components/subject-concepts-panel';
 import { SubjectFilesPanel } from '@/components/subject-files-panel';
-import { SubjectSyllabusTopicsPanel, type SubjectConcept, type SubjectSyllabusTopic } from '@/components/subject-syllabus-topics-panel';
+import {
+    SubjectSyllabusTopicsPanel,
+    type SubjectConcept,
+    type SubjectSyllabusTopic,
+} from '@/components/subject-syllabus-topics-panel';
 import { SubjectTopicExtractionPanel } from '@/components/subject-topic-extraction-panel';
 import URLTabsContainer from '@/components/url-tabs-container';
 import type { TabItem } from '@/components/url-tabs-container';
 import { subjects } from '@/lib/curriculum-routes';
 import { subjectTopics } from '@/lib/curriculum-routes';
+import { programSubjects } from '@/lib/curriculum-routes';
+import programs from '@/routes/programs';
 import generations from '@/routes/programs/curriculum-generations';
 
-export default function Subject({ subject, programFiles, topicExtractionSummary, topicExtractionEnabled, topicExtractionUnavailableReason }: {
-    subject: { id: number; name: string; code: string | null; program: { id: number }; syllabus_topics: SubjectSyllabusTopic[]; concepts: SubjectConcept[] };
+export default function Subject({
+    subject,
+    programFiles,
+    topicExtractionSummary,
+    topicExtractionEnabled,
+    topicExtractionUnavailableReason,
+}: {
+    subject: {
+        id: number;
+        name: string;
+        code: string | null;
+        program: { id: number; name: string };
+        syllabus_topics: SubjectSyllabusTopic[];
+        concepts: SubjectConcept[];
+    };
     programFiles: import('@/components/source-files').SourceFile[];
-    topicExtractionSummary: { count: number; latest: { id: number; status: string } | null };
+    topicExtractionSummary: {
+        count: number;
+        latest: { id: number; status: string } | null;
+    };
     topicExtractionEnabled: boolean;
     topicExtractionUnavailableReason: string | null;
 }) {
+    const { url } = usePage();
+    const requestedTab = new URLSearchParams(url.split('?')[1] ?? '').get(
+        'tab',
+    );
+    const activeTab =
+        requestedTab &&
+        ['topics', 'concepts', 'files', 'extraction'].includes(requestedTab)
+            ? requestedTab
+            : 'topics';
     const tabs: TabItem[] = [
         {
             value: 'topics',
             label: 'Syllabus topics',
-            content: <SubjectSyllabusTopicsPanel subject={subject} topics={subject.syllabus_topics} concepts={subject.concepts} />,
+            content: (
+                <SubjectSyllabusTopicsPanel
+                    subject={subject}
+                    topics={subject.syllabus_topics}
+                    concepts={subject.concepts}
+                />
+            ),
         },
         {
             value: 'concepts',
             label: 'Concepts',
-            content: <SubjectConceptsPanel subject={subject} concepts={subject.concepts} topics={subject.syllabus_topics} />,
+            content: (
+                <SubjectConceptsPanel
+                    subject={subject}
+                    concepts={subject.concepts}
+                    topics={subject.syllabus_topics}
+                />
+            ),
         },
         {
             value: 'files',
             label: 'Files',
-            content: <SubjectFilesPanel programId={subject.program.id} subjectId={subject.id} files={programFiles} />,
+            content: (
+                <SubjectFilesPanel
+                    programId={subject.program.id}
+                    subjectId={subject.id}
+                    files={programFiles}
+                />
+            ),
         },
         {
             value: 'extraction',
             label: 'Topic extraction',
-            content: <SubjectTopicExtractionPanel program={subject.program} subject={subject} summary={topicExtractionSummary} enabled={topicExtractionEnabled} unavailableReason={topicExtractionUnavailableReason} />,
+            content: (
+                <SubjectTopicExtractionPanel
+                    program={subject.program}
+                    subject={subject}
+                    summary={topicExtractionSummary}
+                    enabled={topicExtractionEnabled}
+                    unavailableReason={topicExtractionUnavailableReason}
+                />
+            ),
         },
     ];
 
     return (
-        <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <PageShell>
             <Head title={subject.name} />
-            <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    {subject.code && <p className="text-sm font-medium uppercase tracking-wide text-primary">{subject.code}</p>}
-                    <h1 className="text-3xl font-semibold tracking-tight">{subject.name}</h1>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <Link href={generations.create(subject.program.id, { query: { kind: 'concepts', subject_id: subject.id } })} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Draft concepts</Link>
-                    <Link href={generations.create(subject.program.id, { query: { kind: 'lessons', subject_id: subject.id, scope_type: 'subject', scope_id: subject.id } })} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Draft lessons</Link>
-                    <Link href={subjectTopics.index(subject)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Manage syllabus topics</Link>
-                    <Link href={subjects.edit(subject)} className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent">Edit subject</Link>
-                </div>
-            </header>
-            <URLTabsContainer tabs={tabs} defaultTab="topics" variant="full-width" boxedBody={false} />
-        </main>
+            <PageHeader
+                eyebrow={`${subject.program.name}${subject.code ? ` · ${subject.code}` : ''}`}
+                title={subject.name}
+                description="Manage this subject’s official syllabus outline, instructional concepts, source materials, and review proposals. Official syllabus topics and author-approved learning content are shown in separate sections."
+                actions={
+                    <>
+                        <Button asChild>
+                            <Link href={subjectTopics.create(subject)}>
+                                Add syllabus topic
+                            </Link>
+                        </Button>
+                        <Button variant="outline" asChild>
+                            <Link
+                                href={generations.create(subject.program.id, {
+                                    query: {
+                                        kind: 'concepts',
+                                        subject_id: subject.id,
+                                    },
+                                })}
+                            >
+                                Draft concepts
+                            </Link>
+                        </Button>
+                        <Button variant="outline" asChild>
+                            <Link
+                                href={generations.create(subject.program.id, {
+                                    query: {
+                                        kind: 'lessons',
+                                        subject_id: subject.id,
+                                        scope_type: 'subject',
+                                        scope_id: subject.id,
+                                    },
+                                })}
+                            >
+                                Draft lessons
+                            </Link>
+                        </Button>
+                        <Button variant="outline" asChild>
+                            <Link
+                                href={subjects.edit(subject, {
+                                    query: { tab: activeTab },
+                                })}
+                            >
+                                Edit subject
+                            </Link>
+                        </Button>
+                    </>
+                }
+            />
+            <URLTabsContainer
+                tabs={tabs}
+                defaultTab="topics"
+                variant="full-width"
+                boxedBody={false}
+            />
+        </PageShell>
     );
 }
 
-Subject.layout = (props: { subject: { id: number } }) => ({ breadcrumbs: [{ title: 'Subjects', href: subjects.index() }, { title: 'Subject', href: subjects.show(props.subject) }] });
+Subject.layout = (props: {
+    subject: { id: number; program: { id: number } };
+}) => ({
+    breadcrumbs: [
+        { title: 'Program', href: programs.show(props.subject.program) },
+        {
+            title: 'Subjects',
+            href: programSubjects.index(props.subject.program),
+        },
+        { title: 'Subject', href: subjects.show(props.subject) },
+    ],
+});

@@ -267,6 +267,7 @@ test('an administrator can view all curriculum extractions for a program', funct
         ->assertInertia(fn ($page) => $page
             ->component('admin/curriculum-extractions/index')
             ->where('program.id', $program->id)
+            ->where('curriculumExtractionHasSources', false)
             ->has('extractions', 1)
             ->where('extractions.0.id', $extraction->id)
             ->where('extractions.0.source_files.0.title', 'Official syllabus.pdf')
@@ -472,8 +473,8 @@ test('a reviewer can preview and merge selected duplicate subjects while publish
     $file = ProgramFile::factory()->for($program)->create([
         'content_hash' => str_repeat('e', 64), 'embedding_status' => FileEmbeddingStatus::Complete,
     ]);
-    $target = Subject::factory()->for($program)->create(['name' => 'Financial Accounting and Reporting', 'code' => 'FAR']);
-    $duplicate = Subject::factory()->for($program)->create(['name' => 'FINANCIAL ACCOUNTING AND REPORTING', 'code' => null]);
+    $target = Subject::factory()->for($program)->create(['name' => 'Financial Accounting and Reporting', 'code' => 'FAR', 'sort_order' => 0]);
+    $duplicate = Subject::factory()->for($program)->create(['name' => 'FINANCIAL ACCOUNTING AND REPORTING', 'code' => null, 'sort_order' => 1]);
     $keptTopic = SyllabusTopic::factory()->for($target)->create(['title' => 'Cash', 'code' => 'FAR-1', 'parent_id' => null]);
     $duplicateTopic = SyllabusTopic::factory()->for($duplicate)->create(['title' => 'CASH', 'code' => 'far-1', 'parent_id' => null]);
     $extraTopic = SyllabusTopic::factory()->for($duplicate)->create(['title' => 'Banks', 'code' => null, 'parent_id' => null]);

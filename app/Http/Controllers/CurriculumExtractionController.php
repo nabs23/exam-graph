@@ -22,6 +22,7 @@ class CurriculumExtractionController extends Controller
         return Inertia::render('admin/curriculum-extractions/index', [
             'program' => $program->only(['id', 'name', 'code']),
             'curriculumExtractionEnabled' => $unavailableReason === null,
+            'curriculumExtractionHasSources' => $service->hasCompletedPdfSources($program),
             'curriculumExtractionUnavailableReason' => $unavailableReason,
             'curriculumExtractionModels' => $service->availableModels(),
             'curriculumExtractionDefaultModel' => config('ai.official_curriculum.model'),
@@ -94,6 +95,7 @@ class CurriculumExtractionController extends Controller
             'existingSubjects' => $curriculumExtraction->program->subjects()
                 ->with('syllabusTopics:id,subject_id,parent_id,code,title')
                 ->withCount(['concepts', 'files'])
+                ->orderBy('sort_order')
                 ->orderBy('id')
                 ->get(['id', 'program_id', 'name', 'code', 'description', 'sort_order'])
                 ->map(fn ($subject): array => [

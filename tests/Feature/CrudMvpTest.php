@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Concept;
+use App\Models\Lesson;
 use App\Models\Program;
 use App\Models\Question;
 use App\Models\Quiz;
@@ -31,6 +32,14 @@ test('a public learner can submit a quiz and receive persisted progress', functi
     $this->assertDatabaseHas('concept_progress', ['concept_id' => $concept->id, 'last_score' => 100, 'best_score' => 100, 'is_completed' => true]);
 
     $attempt = QuizAttempt::query()->firstOrFail();
+    $this->actingAs($user)
+        ->get(route('attempts.result', $attempt))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('study/result')
+            ->where('attempt.quiz.title', 'PPE check')
+            ->where('attempt.quiz.concept.subject.program.code', 'CPALE')
+            ->where('attempt.quiz.concept.syllabus_topic.title', 'PPE'));
+
     $this->actingAs(User::factory()->create())
         ->get(route('attempts.result', $attempt))
         ->assertForbidden();
@@ -146,6 +155,45 @@ test('public study and progress entry points render for the local learner', func
     $this->get(route('progress.index'))->assertOk();
 });
 
+test('study pages retain program context and distinguish official topics from concepts', function () {
+    $program = Program::factory()->create(['name' => 'Licensure Review', 'code' => 'LIC']);
+    $subject = Subject::factory()->for($program)->create(['name' => 'Financial Accounting']);
+    $topic = SyllabusTopic::factory()->for($subject)->create(['code' => 'PPE', 'title' => 'Property, Plant, and Equipment']);
+    $concept = Concept::factory()->for($subject)->create([
+        'syllabus_topic_id' => $topic->id,
+        'code' => 'PPE-01',
+        'title' => 'Initial measurement',
+    ]);
+    $lesson = Lesson::factory()->for($concept)->create();
+    $quiz = Quiz::query()->create(['concept_id' => $concept->id, 'title' => 'PPE knowledge check']);
+    $this->actingAs(User::factory()->create());
+
+    $this->get(route('study.subjects.show', $subject))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('study/subject')
+            ->where('subject.program.code', 'LIC')
+            ->where('subject.concepts.0.syllabus_topic.title', 'Property, Plant, and Equipment'));
+
+    $this->get(route('study.concepts.show', $concept))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('study/concept')
+            ->where('concept.subject.program.code', 'LIC')
+            ->where('concept.syllabus_topic.title', 'Property, Plant, and Equipment'));
+
+    $this->get(route('study.lessons.show', $lesson))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('study/lesson')
+            ->where('lesson.concept.subject.program.code', 'LIC')
+            ->where('lesson.concept.syllabus_topic.title', 'Property, Plant, and Equipment'));
+
+    $this->get(route('study.quizzes.show', $quiz))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('study/quiz')
+            ->where('quiz.concept.subject.program.code', 'LIC')
+            ->where('quiz.concept.syllabus_topic.title', 'Property, Plant, and Equipment')
+            ->has('quiz.questions', 0));
+});
+
 test('topic routes resolve the requested topic for viewing editing updating and deleting', function () {
     $subject = Subject::factory()->create();
     $topic = SyllabusTopic::factory()->for($subject)->create();
@@ -167,6 +215,45 @@ test('topic routes resolve the requested topic for viewing editing updating and 
         ->assertRedirect($subject->curriculumRoute('subjects.show'));
     $this->assertModelMissing($topic);
     $this->get($topic->curriculumRoute('topics.show'))->assertNotFound();
+});
+
+test('topic forms include parent hierarchy and codes for clearer selection', function () {
+    $subject = Subject::factory()->create();
+    $parent = SyllabusTopic::factory()->for($subject)->create([
+        'code' => 'FND',
+        'title' => 'Foundations',
+        'sort_order' => 0,
+    ]);
+    $child = SyllabusTopic::factory()->for($subject)->create([
+        'parent_id' => $parent->id,
+        'code' => 'FND-1',
+        'title' => 'Recognition',
+        'sort_order' => 1,
+    ]);
+    $topic = SyllabusTopic::factory()->for($subject)->create([
+        'parent_id' => $child->id,
+        'code' => 'FND-1.1',
+        'title' => 'Initial measurement',
+        'sort_order' => 2,
+    ]);
+    $this->actingAs(User::factory()->admin()->create());
+
+    $this->get(route('topics.create', $subject->curriculumRouteParameters()))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('admin/topics/create')
+            ->has('parents', 3)
+            ->where('parents.0.parent_id', null)
+            ->where('parents.0.code', 'FND')
+            ->where('parents.1.parent_id', $parent->id)
+            ->where('parents.1.code', 'FND-1'));
+
+    $this->get($topic->curriculumRoute('topics.edit'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('admin/topics/edit')
+            ->has('parents', 2)
+            ->where('parents.1.id', $child->id)
+            ->where('parents.1.parent_id', $parent->id)
+            ->where('parents.1.code', 'FND-1'));
 });
 
 test('content administrators can create a child topic', function () {

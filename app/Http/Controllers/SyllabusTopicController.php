@@ -35,7 +35,12 @@ class SyllabusTopicController extends Controller
      */
     public function create(Program $program, Subject $subject): Response
     {
-        return Inertia::render('admin/topics/create', ['subject' => $subject, 'parents' => $subject->syllabusTopics()->orderBy('sort_order')->get(['id', 'subject_id', 'title'])]);
+        return Inertia::render('admin/topics/create', [
+            'subject' => $subject,
+            'parents' => $subject->syllabusTopics()
+                ->orderBy('sort_order')
+                ->get(['id', 'subject_id', 'parent_id', 'code', 'title']),
+        ]);
     }
 
     /**
@@ -45,9 +50,10 @@ class SyllabusTopicController extends Controller
     {
         $data = $request->validated();
         $this->ensureParentBelongsToSubject($data['parent_id'] ?? null, $subject);
-        $topic = $subject->syllabusTopics()->create($data);
+        $subject->syllabusTopics()->create($data);
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'The syllabus topic was created.']);
 
-        return redirect()->to($subject->curriculumRoute('subjects.show'))->with('success', "Created {$topic->title}.");
+        return redirect()->to($subject->curriculumRoute('subjects.show'));
     }
 
     /**
@@ -55,7 +61,12 @@ class SyllabusTopicController extends Controller
      */
     public function show(Program $program, Subject $subject, SyllabusTopic $topic): Response
     {
-        return Inertia::render('admin/topics/show', ['topic' => $topic->load(['subject.program', 'parent', 'children', 'concepts'])]);
+        $topic->load(['subject.program', 'parent', 'children', 'concepts']);
+
+        return Inertia::render('admin/topics/show', [
+            'topic' => $topic,
+            'deleteBlockedReason' => $this->deleteBlockedReason($topic),
+        ]);
     }
 
     /**
@@ -63,7 +74,14 @@ class SyllabusTopicController extends Controller
      */
     public function edit(Program $program, Subject $subject, SyllabusTopic $topic): Response
     {
-        return Inertia::render('admin/topics/edit', ['topic' => $topic, 'subject' => $topic->subject, 'parents' => $topic->subject->syllabusTopics()->where('id', '!=', $topic->id)->get(['id', 'subject_id', 'title'])]);
+        return Inertia::render('admin/topics/edit', [
+            'topic' => $topic,
+            'subject' => $topic->subject,
+            'parents' => $topic->subject->syllabusTopics()
+                ->where('id', '!=', $topic->id)
+                ->orderBy('sort_order')
+                ->get(['id', 'subject_id', 'parent_id', 'code', 'title']),
+        ]);
     }
 
     /**
@@ -75,6 +93,7 @@ class SyllabusTopicController extends Controller
         $this->ensureParentBelongsToSubject($data['parent_id'] ?? null, $topic->subject);
         abort_if((int) ($data['parent_id'] ?? 0) === $topic->id, 422, 'A topic cannot be its own parent.');
         $topic->update($data);
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Syllabus topic changes were saved.']);
 
         return redirect()->to($topic->subject->curriculumRoute('subjects.show'));
     }
@@ -84,11 +103,46 @@ class SyllabusTopicController extends Controller
      */
     public function destroy(Program $program, Subject $subject, SyllabusTopic $topic): RedirectResponse
     {
-        abort_if($topic->children()->exists() || $topic->concepts()->exists(), 422, 'Remove child topics and concepts before deleting this topic.');
+        $blockedReason = $this->deleteBlockedReason($topic);
+
+        if ($blockedReason !== null) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => $blockedReason]);
+
+            return redirect()->to($topic->curriculumRoute('topics.show'));
+        }
+
         $subject = $topic->subject;
         $topic->delete();
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'The syllabus topic was deleted.']);
 
         return redirect()->to($subject->curriculumRoute('subjects.show'));
+    }
+
+    private function deleteBlockedReason(SyllabusTopic $topic): ?string
+    {
+        $dependencies = [];
+
+        $hasChildren = $topic->relationLoaded('children')
+            ? $topic->children->isNotEmpty()
+            : $topic->children()->exists();
+
+        if ($hasChildren) {
+            $dependencies[] = 'child topics';
+        }
+
+        $hasConcepts = $topic->relationLoaded('concepts')
+            ? $topic->concepts->isNotEmpty()
+            : $topic->concepts()->exists();
+
+        if ($hasConcepts) {
+            $dependencies[] = 'linked concepts';
+        }
+
+        if ($dependencies === []) {
+            return null;
+        }
+
+        return 'Remove '.implode(' and ', $dependencies).' before deleting this topic.';
     }
 
     private function ensureParentBelongsToSubject(?int $parentId, Subject $subject): void

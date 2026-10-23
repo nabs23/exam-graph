@@ -65,6 +65,16 @@ class OfficialCurriculumExtractionService
         ], fn (mixed $model): bool => is_string($model) && $model !== '')));
     }
 
+    public function hasCompletedPdfSources(Program $program): bool
+    {
+        return $program->files()
+            ->where('upload_status', FileUploadStatus::Uploaded)
+            ->where('mime_type', 'application/pdf')
+            ->where('embedding_status', FileEmbeddingStatus::Complete)
+            ->whereNotNull('content_hash')
+            ->exists();
+    }
+
     public function queue(Program $program, User $requester, ?string $model = null): CurriculumExtraction
     {
         $this->assertReady();

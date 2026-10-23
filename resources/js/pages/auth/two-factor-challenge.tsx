@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
     InputOTP,
     InputOTPGroup,
@@ -64,7 +65,9 @@ export default function TwoFactorChallenge() {
                         <>
                             {showRecoveryInput ? (
                                 <>
+                                    <Label htmlFor="recovery_code">Recovery code</Label>
                                     <Input
+                                        id="recovery_code"
                                         name="recovery_code"
                                         type="text"
                                         placeholder="Enter recovery code"
@@ -77,8 +80,11 @@ export default function TwoFactorChallenge() {
                                 </>
                             ) : (
                                 <div className="flex flex-col items-center justify-center space-y-3 text-center">
+                                    <Label htmlFor="code">Authentication code</Label>
                                     <div className="flex w-full items-center justify-center">
                                         <InputOTP
+                                            id="code"
+                                            aria-label="Authentication code"
                                             name="code"
                                             maxLength={OTP_MAX_LENGTH}
                                             value={code}

@@ -26,7 +26,12 @@ class CurriculumGenerationController extends Controller
             'program' => $program->only(['id', 'name', 'code']),
             'generationEnabled' => $service->unavailableReason() === null,
             'generationUnavailableReason' => $service->unavailableReason(),
-            'generations' => $program->curriculumGenerations()->with(['requester:id,name', 'reviewer:id,name'])->latest()->limit(50)->get(),
+            'generations' => $program->curriculumGenerations()
+                ->with(['requester:id,name', 'reviewer:id,name'])
+                ->orderByRaw('CASE WHEN status = ? THEN 0 ELSE 1 END', [CurriculumGenerationStatus::Reviewing->value])
+                ->latest()
+                ->limit(50)
+                ->get(),
         ]);
     }
 
@@ -47,7 +52,8 @@ class CurriculumGenerationController extends Controller
                 'syllabusTopics' => fn ($query) => $query->orderBy('sort_order')->orderBy('id')->select(['id', 'subject_id', 'parent_id', 'title', 'code', 'description', 'sort_order']),
                 'concepts' => fn ($query) => $query->orderBy('sort_order')->orderBy('id')->with(['syllabusTopic:id,title,code', 'learningObjectives:id,concept_id,description,sort_order']),
             ])
-            ->orderBy('name')
+            ->orderBy('sort_order')
+            ->orderBy('id')
             ->get(['id', 'name', 'code']);
         $requestedSubjectId = filter_var($request->query('subject_id'), FILTER_VALIDATE_INT);
         $initialSubjectId = $requestedSubjectId !== false && $subjects->contains('id', $requestedSubjectId) ? $requestedSubjectId : null;
@@ -73,6 +79,7 @@ class CurriculumGenerationController extends Controller
             ])->all(),
             'generationEnabled' => $service->unavailableReason() === null,
             'generationUnavailableReason' => $service->unavailableReason(),
+            'maxSourceFiles' => max(1, (int) config('ai.curriculum_generation.max_files', 10)),
             'models' => $service->availableModels(),
             'defaultModel' => config('ai.curriculum_generation.model'),
             'kinds' => array_map(fn (CurriculumGenerationKind $kind): array => [

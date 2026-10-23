@@ -1,7 +1,10 @@
-import { Head, Link, router } from "@inertiajs/react";
-import { SourceFiles, type SourceFile } from "@/components/source-files";
-import programs from "@/routes/programs";
-import programUploads from "@/routes/programs/files";
+import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
+import { PageHeader, PageShell } from '@/components/page-shell';
+import { Button } from '@/components/ui/button';
+import { SourceFiles, type SourceFile } from '@/components/source-files';
+import programs from '@/routes/programs';
+import programUploads from '@/routes/programs/files';
 
 export default function ProgramFilesIndex({
     program,
@@ -14,48 +17,136 @@ export default function ProgramFilesIndex({
     subjects: { id: number; name: string }[];
     subjectFilter: string;
 }) {
+    const [pendingSubjectFilter, setPendingSubjectFilter] = useState<
+        string | null
+    >(null);
+    const [uploadSuccessMessage, setUploadSuccessMessage] = useState<
+        string | null
+    >(null);
+    const activeSubjectFilter = pendingSubjectFilter ?? subjectFilter;
+    const selectedSubject = subjects.find(
+        (subject) => subject.id.toString() === activeSubjectFilter,
+    );
+    const emptyStateMessage =
+        activeSubjectFilter === 'shared'
+            ? 'No files are shared across this program yet.'
+            : selectedSubject
+              ? `No files are assigned to ${selectedSubject.name} yet.`
+              : 'No source files have been uploaded to this program yet.';
+    const emptyStateHint =
+        activeSubjectFilter === 'all'
+            ? 'Upload a PDF, DOCX, or EPUB file up to 100 MiB to start the library.'
+            : 'Upload a file in this scope, or choose another scope to view its files.';
+
     return (
-        <main className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <PageShell className="mx-auto max-w-6xl">
             <Head title={`${program.name} files`} />
-            <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    <p className="text-sm font-medium uppercase tracking-wide text-primary">
-                        {program.code}
-                    </p>
-                    <h1 className="text-3xl font-semibold tracking-tight">
-                        {program.name}
-                    </h1>
-                    <p className="mt-2 text-muted-foreground">
-                        Source files for this program.
-                    </p>
-                </div>
-                <Link
-                    href={programs.show(program)}
-                    className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs hover:bg-accent"
-                >
-                    Back to program
-                </Link>
-            </header>
-            <label className="block max-w-sm text-sm font-medium">
-                <span className="mb-1.5 block">Show files for</span>
+            <PageHeader
+                eyebrow={`${program.code} · ${program.name}`}
+                title="Source files"
+                description="Upload and organize reference material for this program and its subjects."
+                actions={
+                    <Button asChild variant="outline">
+                        <Link
+                            href={programs.show(program, {
+                                query: { tab: 'files' },
+                            })}
+                        >
+                            Back to program
+                        </Link>
+                    </Button>
+                }
+            />
+            <label
+                htmlFor="source-file-subject-filter"
+                className="grid max-w-sm gap-2 text-sm font-medium"
+            >
+                <span>Show files for</span>
                 <select
-                    value={subjectFilter}
-                    onChange={(event) => router.visit(programUploads.index(program, { query: { subject: event.target.value } }))}
-                    className="block w-full rounded-lg border-input bg-background px-3 py-2 text-sm shadow-sm"
+                    id="source-file-subject-filter"
+                    value={activeSubjectFilter}
+                    disabled={pendingSubjectFilter !== null}
+                    onChange={(event) => {
+                        const nextFilter = event.target.value;
+                        setPendingSubjectFilter(nextFilter);
+                        router.visit(
+                            programUploads.index(program, {
+                                query: { subject: nextFilter },
+                            }),
+                            {
+                                onFinish: () => setPendingSubjectFilter(null),
+                            },
+                        );
+                    }}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                     <option value="all">All program files</option>
                     <option value="shared">Shared across program</option>
-                    {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+                    {subjects.map((subject) => (
+                        <option key={subject.id} value={subject.id}>
+                            {subject.name}
+                        </option>
+                    ))}
                 </select>
             </label>
-            <SourceFiles ownerId={program.id} files={files} subjects={subjects} />
-        </main>
+            {pendingSubjectFilter !== null && (
+                <p role="status" className="text-sm text-muted-foreground">
+                    Loading{' '}
+                    {selectedSubject?.name ??
+                        (activeSubjectFilter === 'shared'
+                            ? 'shared'
+                            : 'all program')}{' '}
+                    files…
+                </p>
+            )}
+            {uploadSuccessMessage && (
+                <p
+                    role="status"
+                    aria-live="polite"
+                    className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm"
+                >
+                    {uploadSuccessMessage}
+                </p>
+            )}
+            <div aria-busy={pendingSubjectFilter !== null}>
+                <SourceFiles
+                    ownerId={program.id}
+                    files={files}
+                    subjects={subjects}
+                    defaultUploadSubjectId={selectedSubject?.id ?? null}
+                    emptyStateMessage={emptyStateMessage}
+                    emptyStateHint={emptyStateHint}
+                    onUploadComplete={(uploadedSubjectId) => {
+                        setUploadSuccessMessage(null);
+                        router.visit(
+                            programUploads.index(program, {
+                                query: {
+                                    subject: uploadedSubjectId || 'shared',
+                                },
+                            }),
+                            {
+                                preserveState: true,
+                                onSuccess: () =>
+                                    setUploadSuccessMessage(
+                                        'Upload complete. The file appears below with its current text processing status.',
+                                    ),
+                            },
+                        );
+                    }}
+                />
+            </div>
+        </PageShell>
     );
 }
 
 ProgramFilesIndex.layout = (props: { program: { id: number } }) => ({
     breadcrumbs: [
-        { title: "Program", href: programs.show(props.program) },
-        { title: "Program files", href: programUploads.index(props.program) },
+        {
+            title: 'Program',
+            href: programs.show(props.program, {
+                query: { tab: 'files' },
+            }),
+        },
+        { title: 'Program files', href: programUploads.index(props.program) },
     ],
 });

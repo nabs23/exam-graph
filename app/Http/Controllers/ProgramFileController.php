@@ -42,7 +42,7 @@ class ProgramFileController extends Controller
         return Inertia::render('admin/program-files/index', [
             'program' => $program,
             'files' => $files->get(),
-            'subjects' => $program->subjects()->orderBy('name')->get(['id', 'name']),
+            'subjects' => $program->subjects()->orderBy('sort_order')->orderBy('id')->get(['id', 'name']),
             'subjectFilter' => $filter,
         ]);
     }
@@ -130,7 +130,7 @@ class ProgramFileController extends Controller
 
         return Inertia::render('admin/program-files/show', [
             'file' => $programFile->load('uploader:id,name', 'program:id,name,code', 'subject:id,name')->makeHidden(['storage_key', 'storage_disk']),
-            'subjects' => Subject::query()->where('program_id', $programFile->program_id)->orderBy('name')->get(['id', 'name']),
+            'subjects' => Subject::query()->where('program_id', $programFile->program_id)->orderBy('sort_order')->orderBy('id')->get(['id', 'name']),
             'fileEmbeddingsEnabled' => $embeddingsAvailable,
             'embeddingUnavailableReason' => $embeddingUnavailableReason,
             'embeddingPreviews' => $embeddingPreviews,
@@ -164,16 +164,55 @@ class ProgramFileController extends Controller
         return back();
     }
 
-    public function destroy(ProgramFile $programFile): RedirectResponse
+    public function destroy(Request $request, ProgramFile $programFile): RedirectResponse
     {
-        DB::transaction(function () use ($programFile): void {
+        $deletionBlockedReason = DB::transaction(function () use ($programFile): ?string {
             $lockedFile = ProgramFile::query()->lockForUpdate()->findOrFail($programFile->id);
             abort_unless(in_array($lockedFile->upload_status, [FileUploadStatus::Uploaded, FileUploadStatus::Failed, FileUploadStatus::DeletePending], true), 409);
-            abort_if($this->hasHistoricalReferences($lockedFile), 422, 'This source file is used by an extraction or curriculum citation and cannot be deleted.');
+
+            if ($this->hasHistoricalReferences($lockedFile)) {
+                return 'This source file is referenced by curriculum history and must remain available.';
+            }
 
             $lockedFile->forceFill(['upload_status' => FileUploadStatus::DeletePending])->save();
             DeleteProgramFile::dispatch($lockedFile->id)->afterCommit();
+
+            return null;
         });
+
+        if ($deletionBlockedReason !== null) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => $deletionBlockedReason]);
+
+            return $this->deletionRedirect($request, $programFile);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'File deletion has started.']);
+
+        return $this->deletionRedirect($request, $programFile);
+    }
+
+    private function deletionRedirect(Request $request, ProgramFile $programFile): RedirectResponse
+    {
+        if ($request->query('tab') === 'files') {
+            return to_route('programs.show', [
+                'program' => $programFile->program_id,
+                'tab' => 'files',
+            ]);
+        }
+
+        $subjectFilter = $request->query('subject');
+        $isValidSubjectFilter = $subjectFilter === 'all'
+            || $subjectFilter === 'shared'
+            || (is_string($subjectFilter)
+                && ctype_digit($subjectFilter)
+                && $programFile->program->subjects()->whereKey((int) $subjectFilter)->exists());
+
+        if ($isValidSubjectFilter) {
+            return to_route('programs.files.index', [
+                'program' => $programFile->program_id,
+                'subject' => $subjectFilter,
+            ]);
+        }
 
         return to_route('programs.files.index', $programFile->program_id);
     }

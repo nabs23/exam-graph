@@ -28,11 +28,41 @@ test('program file deletion is queued and returns to the file list', function ()
     $this->actingAs(User::factory()->admin()->create())
         ->from(route('program-files.show', $file))
         ->delete(route('program-files.destroy', $file))
-        ->assertRedirect(route('programs.files.index', $file->program_id));
+        ->assertRedirect(route('programs.files.index', $file->program_id))
+        ->assertInertiaFlash('toast.type', 'success')
+        ->assertInertiaFlash('toast.message', 'File deletion has started.');
 
     expect($file->fresh()->upload_status)->toBe(FileUploadStatus::DeletePending);
     Storage::disk('s3')->assertExists($file->storage_key);
     Queue::assertPushed(DeleteProgramFile::class, fn (DeleteProgramFile $job): bool => $job->fileId === $file->id);
+});
+
+test('program file deletion returns to the workspace files tab when started there', function () {
+    Queue::fake([DeleteProgramFile::class]);
+    $program = Program::factory()->create();
+    $file = ProgramFile::factory()->for($program)->create();
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->delete(route('program-files.destroy', $file).'?tab=files')
+        ->assertRedirect(route('programs.show', ['program' => $program, 'tab' => 'files']));
+
+    expect($file->fresh()->upload_status)->toBe(FileUploadStatus::DeletePending);
+});
+
+test('program file deletion preserves the selected subject filter', function () {
+    Queue::fake([DeleteProgramFile::class]);
+    $program = Program::factory()->create();
+    $subject = Subject::factory()->for($program)->create();
+    $file = ProgramFile::factory()->for($program)->for($subject)->create();
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->delete(route('program-files.destroy', $file).'?subject='.$subject->id)
+        ->assertRedirect(route('programs.files.index', [
+            'program' => $program,
+            'subject' => $subject->id,
+        ]));
+
+    expect($file->fresh()->upload_status)->toBe(FileUploadStatus::DeletePending);
 });
 
 test('program files referenced by historical extraction snapshots cannot be deleted', function () {
@@ -50,7 +80,9 @@ test('program files referenced by historical extraction snapshots cannot be dele
 
     $this->actingAs(User::factory()->admin()->create())
         ->delete(route('program-files.destroy', $file))
-        ->assertUnprocessable();
+        ->assertRedirect(route('programs.files.index', $program->id))
+        ->assertInertiaFlash('toast.type', 'error')
+        ->assertInertiaFlash('toast.message', 'This source file is referenced by curriculum history and must remain available.');
 
     $this->assertModelExists($file);
     $this->assertModelExists($extraction);
@@ -72,7 +104,9 @@ test('program files selected for curriculum proposals cannot be deleted', functi
 
     $this->actingAs(User::factory()->admin()->create())
         ->delete(route('program-files.destroy', $file))
-        ->assertUnprocessable();
+        ->assertRedirect(route('programs.files.index', $program->id))
+        ->assertInertiaFlash('toast.type', 'error')
+        ->assertInertiaFlash('toast.message', 'This source file is referenced by curriculum history and must remain available.');
 
     $this->assertModelExists($file);
     Queue::assertNothingPushed();
@@ -86,7 +120,9 @@ test('program files linked directly to curriculum extractions cannot be deleted'
 
     $this->actingAs(User::factory()->admin()->create())
         ->delete(route('program-files.destroy', $file))
-        ->assertUnprocessable();
+        ->assertRedirect(route('programs.files.index', $program->id))
+        ->assertInertiaFlash('toast.type', 'error')
+        ->assertInertiaFlash('toast.message', 'This source file is referenced by curriculum history and must remain available.');
 
     $this->assertModelExists($file);
     $this->assertModelExists($extraction);
@@ -112,7 +148,9 @@ test('program files cited by published topics cannot be deleted', function () {
 
     $this->actingAs(User::factory()->admin()->create())
         ->delete(route('program-files.destroy', $file))
-        ->assertUnprocessable();
+        ->assertRedirect(route('programs.files.index', $program->id))
+        ->assertInertiaFlash('toast.type', 'error')
+        ->assertInertiaFlash('toast.message', 'This source file is referenced by curriculum history and must remain available.');
 
     $this->assertModelExists($topic);
     $this->assertModelExists($file);
@@ -152,7 +190,9 @@ test('program files mapped from legacy sources cannot be deleted while a histori
 
     $this->actingAs(User::factory()->admin()->create())
         ->delete(route('program-files.destroy', $file))
-        ->assertUnprocessable();
+        ->assertRedirect(route('programs.files.index', $program->id))
+        ->assertInertiaFlash('toast.type', 'error')
+        ->assertInertiaFlash('toast.message', 'This source file is referenced by curriculum history and must remain available.');
 
     $this->assertModelExists($extraction);
     $this->assertModelExists($file);
@@ -204,7 +244,9 @@ test('subjects with associated program files cannot be deleted', function () {
 
     $this->actingAs(User::factory()->admin()->create())
         ->delete(route('subjects.destroy', [$program, $subject]))
-        ->assertUnprocessable();
+        ->assertRedirect(route('subjects.edit', [$program, $subject]))
+        ->assertInertiaFlash('toast.type', 'error')
+        ->assertInertiaFlash('toast.message', 'Remove or reassign this subject’s source files before deleting it.');
 
     $this->assertModelExists($subject);
 });

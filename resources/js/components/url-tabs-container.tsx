@@ -1,5 +1,5 @@
 import { router, usePage } from '@inertiajs/react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -81,6 +81,8 @@ export default function URLTabsContainer({
     const { url } = usePage();
     const tabsId = useId();
     const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
+    const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+    const pendingFocusTab = useRef<string | null>(null);
 
     const resolveTab = (rawUrl?: string): string => {
         const fallback = defaultTab || tabs[0]?.value || '';
@@ -115,6 +117,23 @@ export default function URLTabsContainer({
             [queryParam]: value,
         });
     };
+
+    const handleKeyboardTabChange = (value: string) => {
+        pendingFocusTab.current = value;
+        handleTabChange(value);
+
+        if (value === activeTab) {
+            tabButtonRefs.current[value]?.focus();
+            pendingFocusTab.current = null;
+        }
+    };
+
+    useEffect(() => {
+        if (pendingFocusTab.current === activeTab) {
+            tabButtonRefs.current[activeTab]?.focus();
+            pendingFocusTab.current = null;
+        }
+    }, [activeTab]);
 
     return (
         <div className={cn('w-full', className)}>
@@ -159,6 +178,7 @@ export default function URLTabsContainer({
                                             ? 'default'
                                             : 'outline'
                                     }
+                                    aria-pressed={tab.value === activeTab}
                                     className="w-full justify-start"
                                     onClick={() => {
                                         handleTabChange(tab.value);
@@ -201,6 +221,9 @@ export default function URLTabsContainer({
                     {tabs.map((tab, index) => (
                         <Button
                             key={tab.value}
+                            ref={(element) => {
+                                tabButtonRefs.current[tab.value] = element;
+                            }}
                             type="button"
                             variant={
                                 isFullWidthVariant
@@ -222,24 +245,28 @@ export default function URLTabsContainer({
                                 if (event.key === 'ArrowRight') {
                                     event.preventDefault();
                                     const nextIndex = (index + 1) % tabs.length;
-                                    handleTabChange(tabs[nextIndex].value);
+                                    handleKeyboardTabChange(
+                                        tabs[nextIndex].value,
+                                    );
                                 }
 
                                 if (event.key === 'ArrowLeft') {
                                     event.preventDefault();
                                     const prevIndex =
                                         (index - 1 + tabs.length) % tabs.length;
-                                    handleTabChange(tabs[prevIndex].value);
+                                    handleKeyboardTabChange(
+                                        tabs[prevIndex].value,
+                                    );
                                 }
 
                                 if (event.key === 'Home') {
                                     event.preventDefault();
-                                    handleTabChange(tabs[0].value);
+                                    handleKeyboardTabChange(tabs[0].value);
                                 }
 
                                 if (event.key === 'End') {
                                     event.preventDefault();
-                                    handleTabChange(
+                                    handleKeyboardTabChange(
                                         tabs[tabs.length - 1].value,
                                     );
                                 }
@@ -280,6 +307,7 @@ export default function URLTabsContainer({
 
             <div
                 role="tabpanel"
+                tabIndex={0}
                 id={
                     activeTabItem
                         ? getTabPanelId(activeTabItem.value)

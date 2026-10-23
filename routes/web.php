@@ -3,6 +3,7 @@
 use App\Http\Controllers\ConceptController;
 use App\Http\Controllers\CurriculumExtractionController;
 use App\Http\Controllers\CurriculumGenerationController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LearningObjectiveController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\ProgramController;
@@ -91,7 +92,7 @@ Route::middleware(['auth', 'verified', 'can:manage-content'])->group(function ()
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'dashboard')->name('dashboard');
+    Route::get('dashboard', DashboardController::class)->name('dashboard');
 });
 
 require __DIR__.'/settings.php';

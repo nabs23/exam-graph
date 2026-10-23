@@ -13,7 +13,13 @@ class StudyController extends Controller
 {
     public function index(): Response
     {
-        return Inertia::render('study/index', ['programs' => Program::query()->with('subjects:id,program_id,name,code')->orderBy('name')->get()]);
+        return Inertia::render('study/index', ['programs' => Program::query()
+            ->with(['subjects' => fn ($query) => $query
+                ->select(['id', 'program_id', 'name', 'code'])
+                ->orderBy('sort_order')
+                ->orderBy('id')])
+            ->orderBy('name')
+            ->get()]);
     }
 
     public function subject(Subject $subject): Response
@@ -28,6 +34,6 @@ class StudyController extends Controller
 
     public function lesson(Lesson $lesson): Response
     {
-        return Inertia::render('study/lesson', ['lesson' => $lesson->load(['concept.subject'])]);
+        return Inertia::render('study/lesson', ['lesson' => $lesson->load(['concept.subject.program', 'concept.syllabusTopic'])]);
     }
 }
