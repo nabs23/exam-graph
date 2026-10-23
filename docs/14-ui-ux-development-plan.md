@@ -33,7 +33,7 @@ The work targets responsive web. Native mobile apps and new product capabilities
 - The app already has learner study pages, admin CRUD pages, generation create/review pages, shared navigation, page-shell helpers, and a shared component library.
 - The signed-in dashboard now provides role-relevant next actions and empty-state guidance; learner navigation and administrator authoring links appear in separate groups.
 - Program and subject workspaces provide setup actions, counts, and context for subjects, source material, official curriculum, and AI proposals. Subject pages separate official syllabus topics from instructional concepts.
-- Main authoring forms and proposal review pages now use consistent page headers, inline validation, action placement, and visible state. Responsive and keyboard behavior still needs a manual walkthrough.
+- Main authoring forms and proposal review pages use consistent page headers, inline validation, action placement, and visible state. Shared keyboard behavior and representative responsive layouts have been manually reviewed.
 - [08 — Executable Development Plan](08-executable-development-plan.md) already calls for learner and admin dashboards and responsive/accessibility validation; this plan makes those UI/UX tasks actionable.
 
 ## Experience map and shared patterns
@@ -48,7 +48,7 @@ The work targets responsive web. Native mobile apps and new product capabilities
 
 Use the existing `PageShell` and `PageHeader` for route pages. Keep page titles and descriptions short, put the primary action in the header, and use generic resource names in breadcrumbs. Forms use one column on small screens and split into two columns where fields are independent; labels, short hints, inline errors, and a consistent footer keep save and cancel actions together. Use text with status colors, `role="status"` for progress or success, and `role="alert"` for blocking errors. Program and subject workspaces use responsive cards and URL-backed sections; the section picker becomes a sheet on small screens. Preserve Wayfinder links and the current component library.
 
-The highest-priority usability risks are losing program context while creating subjects, confusing official topics with author-created concepts, and mistaking proposal approval for source verification. These are addressed in the authoring work above. Manual responsive and keyboard review remains a release check.
+The highest-priority usability risks are losing program context while creating subjects, confusing official topics with author-created concepts, and mistaking proposal approval for source verification. These are addressed in the authoring work above. The Phase 4 walkthrough records the representative keyboard and responsive checks completed.
 
 ## Delivery phases and acceptance checks
 
@@ -90,20 +90,26 @@ The highest-priority usability risks are losing program context while creating s
 - [x] Apply the shared page shell and actionable empty state to learner progress.
 - [x] Apply the shared patterns to authentication, settings, and remaining secondary pages.
 - [x] Source-audit the shared header, navigation, page shell, dialog/sheet primitives, key forms, and primary learner/admin pages for accessible names, focus treatment, headings, status semantics, and responsive layout patterns; fix issues found in the shared header.
-- [ ] Verify keyboard navigation, visible focus, labels, headings, dialog behavior, and status announcements for important interactions.
-- [ ] Review common desktop, tablet, and phone widths; fix clipped controls, difficult tables, and actions that become hard to reach.
-- [ ] Review loading, empty, error, permission-denied, stale, and success states across the main learner and administrator tasks.
+- [x] Verify keyboard navigation, visible focus, labels, headings, dialog behavior, and status announcements for important interactions.
+- [x] Review common desktop, tablet, and phone widths; fix clipped controls, difficult tables, and actions that become hard to reach.
+- [x] Review loading, empty, error, permission-denied, stale, and success states across the main learner and administrator tasks using representative live screens, existing automated coverage, and source review.
 - **Check:** The core task flows remain understandable and operable at supported widths and with keyboard-only navigation; no high-impact state depends on color alone.
 
 #### Phase 4 implementation review — 2026-10-23
 
 Source review confirms that shared buttons, links, form controls, and mobile navigation include visible focus styling or accessible names; key forms connect validation errors to controls, and reviewed pages use headings and status/alert semantics. The shared page shell and main dashboard, study, and generation-review pages use responsive width, wrapping, and breakpoint patterns. Existing validation, stale-proposal, conflict, permission, empty, and success handling is represented across the relevant learner and administrator workflows.
 
-The source audit found that the shared header exposed an unlabeled, nonfunctional search button and its mobile navigation links had no explicit focus treatment or current-page announcement. The inert search control was removed; the mobile menu trigger and account menu now have accessible names, and navigation links expose `aria-current` and visible focus styling. These changes improve keyboard and assistive-technology support but still require an interactive check.
+The source audit found that the shared header exposed an unlabeled, nonfunctional search button and its mobile navigation links had no explicit focus treatment or current-page announcement. The inert search control was removed; the mobile menu trigger and account menu now have accessible names, and navigation links expose `aria-current` and visible focus styling. Live keyboard review then found that the mobile navigation drawer stayed open after selecting a destination and Escape returned focus to the document body. Navigation now closes the drawer, and closing it restores visible focus to the menu trigger.
 
 Automated verification on this worktree passed: `npm run types:check`, `npm run build`, the frontend lint check (`npx vp check --no-fmt resources/js/pages resources/js/components`), and the full Pest suite (266 tests, 1,801 assertions). `git diff --check` also passed. The broader `npm run check` reports formatting differences across 70 files, including pre-existing and out-of-scope files; no repository-wide formatter was applied.
 
-The interactive keyboard-only walkthrough and visual review at desktop, tablet, and phone widths remain open. Chrome is available, but the browser origin-approval gate rejected opening the local app and disallows alternate browser routes or raw CDP. Launching the installed headless Chrome also fails because its crash-report socket is denied by the sandbox. Source inspection and build/test results do not establish that focus order, dialog behavior, announcements, or actual viewport rendering work correctly, so the Phase 4 acceptance check and rollout completion remain pending that walkthrough.
+#### Phase 4 live walkthrough — 2026-10-23
+
+- **Keyboard and accessibility:** At phone width, opened the mobile sidebar, tabbed through navigation links, and confirmed visible focus rings and `aria-current="page"` on the active destination. Enter navigated and closed the drawer; focus returned visibly to its trigger. Escape also closed the drawer and returned focus. Opened the account dialog and its delete confirmation without confirming deletion; the dialog had an accessible name, labeled password field, and named actions. Escape closed it and restored focus to the invoking button. Forms and page landmarks were checked for associated labels and heading hierarchy. The curriculum-generation review exposes its current state with `role="status"`.
+- **Responsive layouts:** Reviewed desktop (1440px), tablet (768px), and phone (390px) layouts on programs and representative learner/admin pages. The tablet Programs header initially clipped its primary action; moving the header action row breakpoint to `lg` fixed it. After the fix, the action fits at tablet width. Representative phone pages—including Programs, Study, learner concept/lesson/quiz, program workspace, subject form, proposal review, and profile dialog—had no horizontal overflow.
+- **States:** The live Progress page showed a useful empty message and a link to Browse subjects. The pending 136-item proposal displayed “Awaiting Your Review” through a status landmark; an approved lesson proposal displayed its author-approved state. Form required-field behavior was observed without submitting. Existing feature tests cover permission-denied requests, validation, stale proposals, malformed output, duplicate conflicts, and approval behavior. Error, permission-denied, and stale states were verified through source/tests rather than induced in the live account; no data-changing review decision was submitted.
+
+The interactive pass and source/test review satisfy the Phase 4 acceptance check for the representative core flows. This is a usability verification of the current development build, not a claim that every route, browser, or viewport combination has been exhaustively audited.
 
 ## Implementation and review approach
 

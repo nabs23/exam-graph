@@ -38,6 +38,7 @@ type SidebarContext = {
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
+  triggerRef: React.RefObject<HTMLButtonElement | null>
 }
 
 const SidebarContext = React.createContext<SidebarContext | null>(null)
@@ -66,6 +67,7 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -120,8 +122,9 @@ function SidebarProvider({
       openMobile,
       setOpenMobile,
       toggleSidebar,
+      triggerRef,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, triggerRef]
   )
 
   return (
@@ -159,7 +162,7 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { isMobile, state, openMobile, setOpenMobile, triggerRef } = useSidebar()
 
   if (collapsible === "none") {
     return (
@@ -187,6 +190,10 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            triggerRef.current?.focus()
+          }}
           className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
           style={
             {
@@ -251,7 +258,7 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar, isMobile, state } = useSidebar()
+  const { toggleSidebar, isMobile, state, triggerRef } = useSidebar()
 
   return (
     <Button
@@ -259,6 +266,7 @@ function SidebarTrigger({
       data-slot="sidebar-trigger"
       variant="ghost"
       size="icon"
+      ref={triggerRef}
       className={cn("h-7 w-7", className)}
       onClick={(event) => {
         onClick?.(event)

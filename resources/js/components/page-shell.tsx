@@ -30,7 +30,7 @@ export function PageHeader({
     actions,
 }: PageHeaderProps) {
     return (
-        <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-start sm:justify-between">
+        <header className="flex flex-col gap-4 border-b pb-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 space-y-1">
                 {eyebrow && (
                     <p className="wrap-break-words text-sm font-medium tracking-wide text-primary uppercase">
@@ -47,7 +47,7 @@ export function PageHeader({
                 )}
             </div>
             {actions && (
-                <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto sm:max-w-[45%]">
+                <div className="flex w-full min-w-0 flex-wrap gap-2 lg:w-auto lg:max-w-[45%]">
                     {actions}
                 </div>
             )}
